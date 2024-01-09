@@ -1,0 +1,26 @@
+data_dir: /data/private/wangxin/raw
+factor_freq: 10 # 10-minute bars
+n_train: 1000
+n_valid: 30
+dropout: 0.3
+seed: 43
+universe: euniv_largemid
+trading_slot: '1030'
+agg: last
+
+log_dir: log_1030
+checkpoint_dir: checkpoint_1030
+
+rolling_month_gap: 1
+
+x_slots: ['0940',
+ '0950',
+ '1000',
+ '1010',
+ '1020',
+ '1030',]
+
+y_slot: '1030'
+y_lag: 0
+
+returns: [1, 2, 5] # 1D, 2D, 5D returns for training.
