@@ -1,0 +1,16 @@
+# dataset_dir: '/data2/private/wangxin/datasets/'
+feature_set: v2_agg
+d_in: 278
+
+model: 'GPT_small'
+epochs: 20
+patience: 6
+universe: 'euniv_largemid'
+
+n_train: 1000
+n_eval: 30
+n_lag: 5
+n_test: 0 # 0 means no test set
+
+# inference: models to use
+n_latest: 3

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["poetry-core"]
+
+[tool.poetry]
+name = "pit"
+
+
+version = "0.4.0"
+description = "Optimus is a Python ML toolkit."
+authors = ["pit <pit@gmail.com>"]
+readme = "README.md"
+license = "MIT"
+packages = [
+    {include = "pit"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+click = "^8.1"
+einops = "^0.7.0"
+
+# [tool.poetry.scripts]
+# pit = "optimus.cli:pit"
+akshare = "^1.12.20"
+polars = "^0.20.3"
+
