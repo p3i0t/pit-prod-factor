@@ -6,7 +6,7 @@ name = "pit"
 
 
 version = "0.6.6"
-description = "Optimus is a Python ML toolkit."
+description = "Pit is a Python ML toolkit."
 authors = ["pit <pit@gmail.com>"]
 readme = "README.md"
 license = "MIT"
