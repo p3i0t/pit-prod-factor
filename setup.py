@@ -34,7 +34,7 @@ from pit.__init__ import __version__
 # encrypted = ENCRYPTED
 package_name = 'pit'
 encrypted = [f.rstrip() for f in os.popen(f'find {package_name} -name "*.py"')]
-encrypted += [f"{package_name}/configs/config.yaml"]
+# encrypted += [f"{package_name}/configs/config.yaml"]
 # print(encrypted)
 
 # NOTE: overwrite build_py to exclude file in bdist:
