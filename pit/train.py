@@ -169,7 +169,6 @@ class TrainPipeline:
             test_set = self.normalizer.transform(test_set)
         train_logger.info("normalization done.")
         
-        
         train_set = self.df_to_dataset(train_set)
         if self.debug:
             print(f"{train_set.x.shape=}, {type(train_set.x)}")
@@ -184,6 +183,8 @@ class TrainPipeline:
                 train_dataset=train_set,
                 eval_dataset=eval_set,
             )
+            if self.debug:
+                print("before train()")
             trainer.train()
             checkpoint_dir = f"{self.args.milestone_dir}/{CHECHPOINT_META.prefix_dir}"
             torch.save(self.normalizer, f"{checkpoint_dir}/{CHECHPOINT_META.normalizer}")
