@@ -79,7 +79,7 @@ def get_normalizer(name: str = "zscore") -> DataFrameNormalizer:
 
 
 class TrainPipeline:
-    def __init__(self, args: TrainArguments):
+    def __init__(self, args: TrainArguments, debug: bool = False):
         self.args = args
         # construct data source
         begin = self.args.train_date_range[0]
@@ -98,6 +98,7 @@ class TrainPipeline:
             fill_nan=True,
         )
         self.normalizer = get_normalizer(name=args.normalizer)
+        self.debug = debug
 
     
     def split_data(self) -> Tuple[pl.DataFrame, pl.DataFrame, Optional[pl.DataFrame]]:
@@ -166,12 +167,17 @@ class TrainPipeline:
         eval_set = self.normalizer.transform(eval_set)
         if test_set is not None:
             test_set = self.normalizer.transform(test_set)
+        train_logger.info("normalization done.")
         
         
         train_set = self.df_to_dataset(train_set)
+        if self.debug:
+            print(f"{train_set.x.shape=}, {type(train_set.x)}")
+            print(f"{train_set.y.shape=}, {type(train_set.y)}")
         eval_set = self.df_to_dataset(eval_set)
         if test_set is not None:
             test_set = self.df_to_dataset(test_set)
+        
         if train_set and eval_set:
             trainer = StockTrainer(
                 args=self.args,
