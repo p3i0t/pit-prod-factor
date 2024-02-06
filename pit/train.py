@@ -62,8 +62,11 @@ def process_stock_df(
         df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
     if fill_nan:
         df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
-    return df
-            
+    df = df.with_columns(
+        pl.col('date').cast(pl.Utf8),
+        pl.col('symbol').cast(pl.Utf8),
+        )
+    return df   
 
 
 def get_normalizer(name: str = "zscore") -> DataFrameNormalizer:
