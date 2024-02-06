@@ -101,46 +101,47 @@ class TrainPipeline:
 
     
     def split_data(self) -> Tuple[pl.DataFrame, pl.DataFrame, Optional[pl.DataFrame]]:
-        s = perf_counter()
-        df = self.data_source()
-        t = perf_counter() - s
-        train_logger.info(f"time to fetch data: {t:.2f}s")
+        with pl.StringCache():
+            s = perf_counter()
+            df = self.data_source()
+            t = perf_counter() - s
+            train_logger.info(f"time to fetch data: {t:.2f}s")
 
-        train_begin, train_end = self.args.train_date_range
-        train_set = df.filter(
-            pl.col(self.date_col).is_between(
-                pl.lit(datetime.strptime(train_begin, "%Y-%m-%d")),
-                pl.lit(datetime.strptime(train_end, "%Y-%m-%d")),
-            )
-        )
-        train_logger.info(
-            f"{len(train_set)} train samples from {train_begin} to {train_end}."
-        )
-
-        eval_begin, eval_end = self.args.eval_date_range
-        eval_set = df.filter(
-            pl.col(self.date_col).is_between(
-                pl.lit(datetime.strptime(eval_begin, "%Y-%m-%d")),
-                pl.lit(datetime.strptime(eval_end, "%Y-%m-%d")),
-            )
-        )
-        train_logger.info(
-            f"{len(eval_set)} eval samples from {eval_begin} to {eval_end}."
-        )
-
-        test_set = None
-        if self.args.test_date_range is not None:
-            test_begin, test_end = self.args.test_date_range
-            test_set = df.filter(
+            train_begin, train_end = self.args.train_date_range
+            train_set = df.filter(
                 pl.col(self.date_col).is_between(
-                    pl.lit(datetime.strptime(test_begin, "%Y-%m-%d")),
-                    pl.lit(datetime.strptime(test_end, "%Y-%m-%d")),
+                    pl.lit(datetime.strptime(train_begin, "%Y-%m-%d")),
+                    pl.lit(datetime.strptime(train_end, "%Y-%m-%d")),
                 )
             )
             train_logger.info(
-                f"{len(test_set)} test samples from {test_begin} to {test_end}."
+                f"{len(train_set)} train samples from {train_begin} to {train_end}."
             )
-        return train_set, eval_set, test_set
+
+            eval_begin, eval_end = self.args.eval_date_range
+            eval_set = df.filter(
+                pl.col(self.date_col).is_between(
+                    pl.lit(datetime.strptime(eval_begin, "%Y-%m-%d")),
+                    pl.lit(datetime.strptime(eval_end, "%Y-%m-%d")),
+                )
+            )
+            train_logger.info(
+                f"{len(eval_set)} eval samples from {eval_begin} to {eval_end}."
+            )
+
+            test_set = None
+            if self.args.test_date_range is not None:
+                test_begin, test_end = self.args.test_date_range
+                test_set = df.filter(
+                    pl.col(self.date_col).is_between(
+                        pl.lit(datetime.strptime(test_begin, "%Y-%m-%d")),
+                        pl.lit(datetime.strptime(test_end, "%Y-%m-%d")),
+                    )
+                )
+                train_logger.info(
+                    f"{len(test_set)} test samples from {test_begin} to {test_end}."
+                )
+            return train_set, eval_set, test_set
 
     def df_to_dataset(self, df: Optional[pl.DataFrame] = None) -> Optional[StockDataset]:
         if df is None:
