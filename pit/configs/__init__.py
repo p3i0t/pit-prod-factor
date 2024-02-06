@@ -810,6 +810,20 @@ def get_prod_data_config(
     return OmegaConf.create(cfg)
         
 
+_default_config = {
+    'feature_set': 'v2_agg',
+    'd_in': 278,
+    'model': 'GPT_small',
+    'epochs': 20,
+    'patience': 6,
+    'universe': 'euniv_largemid',
+    'n_train': 1000,
+    'n_eval': 30,
+    'n_lag': 5,
+    'n_test': 0,
+    'n_latest': 3,
+}
+
 def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Optional[str] = None) -> TrainArguments:
     if prod is None:
         raise ValueError("prod must be specified")
@@ -817,7 +831,7 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         raise ValueError("milestone must be specified")
     
     # Get absolute path to the directory this script (or module) is in
-    script_dir = os.path.dirname(os.path.realpath(__file__))
+    # script_dir = os.path.dirname(os.path.realpath(__file__))
     prod_available = list_prods()
     if prod not in prod_available:
         raise ValueError(f"prod {prod} not available, "
@@ -827,9 +841,17 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
 
     # prod_cfg = OmegaConf.load(os.path.join(script_dir, f'pred/{prod}.yaml'))
     prod_cfg = get_prod_data_config(prod=prod)
-    meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
+    # meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
+    meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
-    cld = pickle.load(open(os.path.join(script_dir, 'calendar.pkl'), 'rb'))
+    
+    # cld = pickle.load(open(os.path.join(script_dir, 'calendar.pkl'), 'rb'))
+    cld_path = os.getenv("CALENDAR_PATH") or ""
+    
+    if os.path.isfile(cld_path) is False:
+        raise ValueError("CALENDAR_PATH must be specified")
+    else:
+        cld = pickle.load(open(cld_path, 'rb'))
 
     train_range, eval_range, test_range = split_date_ranges(
         cld, milestone=milestone, 
@@ -881,14 +903,15 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         raise ValueError("prod must be specified")
     
     # Get absolute path to the directory this script (or module) is in
-    script_dir = os.path.dirname(os.path.realpath(__file__))
+    # script_dir = os.path.dirname(os.path.realpath(__file__))
     prod_available = list_prods()
     if prod not in prod_available:
         raise ValueError(f"prod {prod} not available, "
                          f"available prods: {prod_available}")
 
     prod_cfg = get_prod_data_config(prod=prod)
-    meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
+    # meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
+    meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
     from pathlib import Path

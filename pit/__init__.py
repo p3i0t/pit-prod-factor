@@ -1,7 +1,9 @@
 """Pit: A Python package for printing money.
 """
 import os
+
 os.environ["DATASET_DIR"] = "dataset"
+os.environ["CALENDAR_PATH"] = "calendar.pkl"
 
 from pit.configs import get_training_config, get_inference_config, ProdsAvailable  # noqa
 from pit.train import TrainPipeline  # noqa
