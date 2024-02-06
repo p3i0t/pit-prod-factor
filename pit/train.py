@@ -88,7 +88,7 @@ class TrainPipeline:
         self.data_source = ParquetStockSource(
             str(self.args.dataset_dir) + '/*',
             process_stock_df,
-            ["date", "symbol"] + self.args.x_slot_columns + self.args.y_slot_columns,
+            ["date", "symbol"] + self.args.x_slot_columns + self.args.y_columns,
             universe=self.args.universe,
             date_range=(begin, end),
             date_col=self.date_col,
@@ -148,7 +148,7 @@ class TrainPipeline:
             x=df.select(self.args.x_slot_columns)
             .to_numpy(order="c")
             .reshape(-1, *self.args.x_shape),
-            y=df.select(self.args.y_slot_columns)
+            y=df.select(self.args.y_columns)
             .to_numpy(order="c")
             .reshape(-1, *self.args.y_shape),
             y_columns=self.args.y_columns,
