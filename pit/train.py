@@ -170,11 +170,11 @@ class TrainPipeline:
         train_logger.info("normalization done.")
         
         train_set = self.df_to_dataset(train_set)
-        if self.debug:
-            train_logger.info(f"{train_set.date.shape=}, {type(train_set.date)}")
-            train_logger.info(f"{train_set.symbol.shape=}, {type(train_set.symbol)}")
-            train_logger.info(f"{train_set.x.shape=}, {type(train_set.x)}")
-            train_logger.info(f"{train_set.y.shape=}, {type(train_set.y)}")
+        # if self.debug:
+        #     train_logger.info(f"{train_set.date.shape=}, {type(train_set.date)}")
+        #     train_logger.info(f"{train_set.symbol.shape=}, {type(train_set.symbol)}")
+        #     train_logger.info(f"{train_set.x.shape=}, {type(train_set.x)}")
+        #     train_logger.info(f"{train_set.y.shape=}, {type(train_set.y)}")
         eval_set = self.df_to_dataset(eval_set)
         if test_set is not None:
             test_set = self.df_to_dataset(test_set)
@@ -185,9 +185,9 @@ class TrainPipeline:
                 train_dataset=train_set,
                 eval_dataset=eval_set,
             )
-            if self.debug:
-                train_logger.info("before train()")
+            train_logger.info("start training.")
             trainer.train()
+            train_logger.info("training done.")
             checkpoint_dir = f"{self.args.milestone_dir}/{CHECHPOINT_META.prefix_dir}"
             torch.save(self.normalizer, f"{checkpoint_dir}/{CHECHPOINT_META.normalizer}")
         else:
