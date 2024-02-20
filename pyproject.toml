@@ -5,7 +5,7 @@ requires = ["poetry-core"]
 name = "pit"
 
 
-version = "0.6.6"
+version = "0.6.66"
 description = "Pit is a Python ML toolkit."
 authors = ["pit <pit@gmail.com>"]
 readme = "README.md"

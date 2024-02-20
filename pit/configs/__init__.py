@@ -20,7 +20,7 @@ from omegaconf import OmegaConf, DictConfig
 # )
  
  
-__all__ = ['get_bars', 'get_training_config', 'get_inference_config', 'ProdsAvailable']
+__all__ = ['get_bars', 'get_training_config', 'get_inference_config', 'list_prods', 'ProdsAvailable']
 
 bar_v2 = [
     "data_source",
@@ -651,13 +651,17 @@ def get_bars(feature_set: str = 'v2_agg') -> list[str]:
         ValueError: _description_
 
     Returns:
-        list[str]: 
+        list[str]: list of bars in the feature set.
     """    
     if feature_set == 'v2_agg':
         bars = sorted(set(bar_v2) - set(excluded_bars))
         agg = ['mean', 'std']
         import itertools
         return [f"{bar}_{a}" for bar, a in itertools.product(bars, agg)]
+    elif feature_set == 'v2':
+        bars = sorted(set(bar_v2) - set(excluded_bars))
+        return bars
+
     else:
         raise ValueError(f"feature_set {feature_set} not supported")
     
@@ -806,7 +810,7 @@ def get_prod_data_config(
 
     _prefix = f"{cfg['ret_prefix']}{int(cfg['slot'])+int(cfg['delay']):04d}"
     cfg['y_cols'] = [f"{_prefix}_{_d}" for _d in cfg['ret_durations']]
-    cfg['experiment_dir'] = f"prod_runs/{cfg['slot']}"
+    # cfg['experiment_dir'] = f"prod_runs/{cfg['slot']}"
     return OmegaConf.create(cfg)
         
 
@@ -865,9 +869,10 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         raise ValueError("DATASET_DIR must be specified")
     else:
         data_dir = Path(data_dir)
+        save_dir = Path(os.getenv('SAVE_DIR') or "runs")
         args = TrainArguments(
             prod=prod,
-            save_dir=cfg.experiment_dir,
+            save_dir=save_dir,
             dataset_dir=data_dir,
             milestone=milestone,
             universe=cfg.universe,
@@ -920,9 +925,10 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         raise ValueError("DATASET_DIR must be specified")
     else:
         data_dir = Path(data_dir)
+        save_dir = Path(os.getenv('SAVE_DIR') or "runs")
         args = InferenceArguments(
             prod=prod,
-            save_dir=cfg.experiment_dir,
+            save_dir=save_dir,
             dataset_dir=data_dir,
             universe=cfg.universe,
             x_columns=get_bars(cfg.feature_set),
