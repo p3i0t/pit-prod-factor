@@ -16,7 +16,7 @@ from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.data import ParquetStockSource
-from dlkit.utils import get_time_slots
+from dlkit.utils import get_time_slots, CHECHPOINT_META
 from pit.utils import normalize_date, process_offline_stock_df, Datetime
 from pit import get_bars
 
@@ -109,7 +109,7 @@ class InferencePipeline:
 
         pred_list = []
         for model_date in models_required:
-            ckpt_dir = f"{self.args.save_dir}/{self.args.prod}/{model_date}"
+            ckpt_dir = f"{self.args.save_dir}/{self.args.prod}/{model_date}/{CHECHPOINT_META.prefix_dir}"
             _model, _normalizer = self._load_ckpt(ckpt_dir)
             _df = _normalizer.transform(deepcopy(df_cs))  # this is model specific
             x = (
