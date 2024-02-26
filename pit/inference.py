@@ -117,6 +117,7 @@ class InferencePipeline:
                 .to_numpy(order="c")
                 .reshape(-1, *self.args.x_shape)
             )
+            x = torch.Tensor(x).to(self.args.device, non_blocking=True)
             pred = _model(x)[:, -1, :]
             pred = pred.detach().cpu().numpy()
             pred_list.append(pred)
