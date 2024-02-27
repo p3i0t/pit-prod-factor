@@ -184,7 +184,7 @@ def load_and_process_online_stock_df(
     x_range: Tuple[str, str],
     universe: str,
     date_range: Optional[tuple[Datetime, Datetime]]=None,
-):
+) -> pl.DataFrame:
     import importlib
     import itertools
     import pandas as pd
@@ -224,6 +224,9 @@ def load_and_process_online_stock_df(
     )
     t = perf_counter() - s
     online_logger.info(f"read 1min bars from datareader, time elapsed: {t:.2f}s")
+    if df_1min.empty:
+        online_logger.error("no 1min bars available.")
+        # return None
 
     df_1min = df_univ.merge(df_1min, on=["date", "symbol"], how="left")
 
@@ -245,7 +248,7 @@ def load_and_process_online_stock_df(
     df = (
         df.lazy()
         .sort(by=meta_cols)
-        .groupby_dynamic(
+        .group_by_dynamic(
             index_column="time",
             every="10m",
             period="9m",
@@ -288,7 +291,8 @@ def infer(
     args: InferenceArguments,
     infer_date: str|Tuple[str, str] = 'today',
     mode: InferenceDataSource = InferenceDataSource.online,
-    log_path: Optional[str] = None
+    log_path: Optional[str] = None,
+    debug: bool = False,
 ) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
     log_path = log_path or 'infer.log'
     logger.add(
@@ -335,5 +339,7 @@ def infer(
         raise ValueError(f"mode: {mode} not supported.")
     
     ip = InferencePipeline(args=args)
+    if debug is True:
+        df.write_csv(f"df_{mode}_{infer_date}.csv")
     return ip(df)
     
