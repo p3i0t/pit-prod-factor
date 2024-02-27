@@ -65,7 +65,17 @@ def train_single(prod, milestone):
 
 @click.group()
 def pit():
-    pass
+    """Manage my hahaha package."""
+    click.echo("Alpha Signals Generator of Pit.")
+    # Create the ~/.pit directory if it doesn't exist
+    pit_dir = os.path.join(os.path.expanduser("~"), ".pit")
+    if not os.path.exists(pit_dir):
+        os.makedirs(pit_dir)
+        click.echo(f"Created directory: {pit_dir}")
+    else:
+        pass
+        # click.echo(f"Directory already exists: {pit_dir}")
+    
 
 
 # pit.add_command(data)
