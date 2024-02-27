@@ -31,3 +31,8 @@ pydantic = "^2.6.0"
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.4"
 nox = "^2023.4.22"
+
+
+[tool.poetry.scripts]
+pit = "pit.cli:pit"
+
