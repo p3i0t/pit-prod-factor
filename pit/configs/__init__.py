@@ -849,13 +849,14 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
-    # cld = pickle.load(open(os.path.join(script_dir, 'calendar.pkl'), 'rb'))
-    cld_path = os.getenv("CALENDAR_PATH") or ""
+    pit_dir = os.path.join(
+        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    env_cfg = OmegaConf.load(open(f"{pit_dir}/config.yml"))
     
-    if os.path.isfile(cld_path) is False:
-        raise ValueError("CALENDAR_PATH must be specified")
+    if os.path.isfile(env_cfg.CALENDAR_PATH) is False:
+        raise ValueError("CALENDAR_PATH {env_cfg.CALENDAR_PATH} does not exist")
     else:
-        cld = pickle.load(open(cld_path, 'rb'))
+        cld = pickle.load(open(env_cfg.CALENDAR_PATH, 'rb'))
 
     train_range, eval_range, test_range = split_date_ranges(
         cld, milestone=milestone, 
@@ -864,43 +865,40 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         n_lag=cfg.n_lag, 
         n_test=cfg.n_test
         )
-    data_dir = os.getenv('DATASET_DIR')
-    if  data_dir is None:
-        raise ValueError("DATASET_DIR must be specified")
-    else:
-        data_dir = Path(data_dir)
-        save_dir = Path(os.getenv('SAVE_DIR') or "runs")
-        args = TrainArguments(
-            prod=prod,
-            save_dir=save_dir,
-            dataset_dir=data_dir,
-            milestone=milestone,
-            universe=cfg.universe,
-            x_columns=get_bars(cfg.feature_set),
-            x_begin=cfg.x_begin,
-            x_end=cfg.x_end,
-            freq_in_min=cfg.freq,
-            y_columns=cfg.y_cols,
-            y_slots=cfg.slot,
-            model=cfg.model,
-            device='cuda',
-            train_date_range=train_range,
-            eval_date_range=eval_range,
-            test_date_range=test_range,
-            epochs=cfg.epochs,
-            lr=5.0e-5,
-            weight_decay=1.0e-3,
-            patience=cfg.patience,
-            normalizer='zscore',
-            seed=42,
-            monitor_metric='loss',
-            monitor_mode='min',
-            train_batch_size=1024,
-            eval_batch_size=2048,
-            test_batch_size=2048,
-            dataloader_drop_last=False,
-        )
-        return args
+
+    dataset_dir = Path(env_cfg.DATASET_DIR)
+    save_dir = Path(env_cfg.SAVE_DIR)
+    args = TrainArguments(
+        prod=prod,
+        save_dir=save_dir,
+        dataset_dir=dataset_dir,
+        milestone=milestone,
+        universe=cfg.universe,
+        x_columns=get_bars(cfg.feature_set),
+        x_begin=cfg.x_begin,
+        x_end=cfg.x_end,
+        freq_in_min=cfg.freq,
+        y_columns=cfg.y_cols,
+        y_slots=cfg.slot,
+        model=cfg.model,
+        device='cuda',
+        train_date_range=train_range,
+        eval_date_range=eval_range,
+        test_date_range=test_range,
+        epochs=cfg.epochs,
+        lr=5.0e-5,
+        weight_decay=1.0e-3,
+        patience=cfg.patience,
+        normalizer='zscore',
+        seed=42,
+        monitor_metric='loss',
+        monitor_mode='min',
+        train_batch_size=1024,
+        eval_batch_size=2048,
+        test_batch_size=2048,
+        dataloader_drop_last=False,
+    )
+    return args
 
 
 def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArguments:
@@ -919,26 +917,27 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
+    pit_dir = os.path.join(
+        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    env_cfg = OmegaConf.load(open(f"{pit_dir}/config.yml"))
+    
     from pathlib import Path
-    data_dir = os.getenv('DATASET_DIR')
-    if  data_dir is None:
-        raise ValueError("DATASET_DIR must be specified")
-    else:
-        data_dir = Path(data_dir)
-        save_dir = Path(os.getenv('SAVE_DIR') or "runs")
-        args = InferenceArguments(
-            prod=prod,
-            save_dir=save_dir,
-            dataset_dir=data_dir,
-            universe=cfg.universe,
-            x_columns=get_bars(cfg.feature_set),
-            x_begin=cfg.x_begin,
-            x_end=cfg.x_end,
-            freq_in_min=cfg.freq,
-            y_columns=cfg.y_cols,
-            y_slots=cfg.slot,
-            model=cfg.model,
-            n_latest=3,
-            device='cuda',
-        )
-        return args
+
+    data_dir = Path(env_cfg.DATASET_DIR)
+    save_dir = Path(env_cfg.SAVE_DIR)
+    args = InferenceArguments(
+        prod=prod,
+        save_dir=save_dir,
+        dataset_dir=data_dir,
+        universe=cfg.universe,
+        x_columns=get_bars(cfg.feature_set),
+        x_begin=cfg.x_begin,
+        x_end=cfg.x_end,
+        freq_in_min=cfg.freq,
+        y_columns=cfg.y_cols,
+        y_slots=cfg.slot,
+        model=cfg.model,
+        n_latest=3,
+        device='cuda',
+    )
+    return args

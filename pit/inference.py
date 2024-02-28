@@ -50,7 +50,7 @@ class InferencePipeline:
         return model, normalizer
 
     def __call__(
-        self, df: pl.DataFrame
+        self, df: pl.DataFrame, /
     ) -> Dict[int, pl.DataFrame] | pl.DataFrame | None:
         if df.shape[0] == 0:
             return pl.DataFrame()
@@ -137,7 +137,7 @@ class InferencePipeline:
 
         return res_dict
 
-    def _preprocess(self, x: pl.DataFrame) -> pl.DataFrame:
+    def _preprocess(self, x: pl.DataFrame, /) -> pl.DataFrame:
         """preprocess the dataframe before feeding into the model.
 
         Args:

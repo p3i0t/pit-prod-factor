@@ -1,5 +1,6 @@
 import os
 import click
+from omegaconf import OmegaConf
 # from typing import Literal
 
 
@@ -31,9 +32,13 @@ def train_single(prod, milestone):
     """cli command to train single model of given prod and milestone.
     """
     from pit import get_training_config, TrainPipeline, list_prods
-    os.environ['DATASET_DIR'] = '/data2/private/wangxin/dataset/10m_v2'
-    os.environ['CALENDAR_PATH'] = 'calendar.pkl'
-    os.environ['SAVE_DIR'] = 'pit_runs'
+    # pit_dir = os.path.join(
+    #     os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    # conf = OmegaConf.load(open(f"{pit_dir}/config.yml"))
+    # config = OmegaConf.to_container(conf)
+    # os.environ['DATASET_DIR'] = config['DATASET_DIR']
+    # os.environ['CALENDAR_PATH'] = config['CALENDAR_PATH']
+    # os.environ['SAVE_DIR'] = config['SAVE_DIR']
     
     valid_prods = list_prods()
     if prod not in valid_prods:
@@ -65,13 +70,23 @@ def train_single(prod, milestone):
 
 @click.group()
 def pit():
-    """Manage my hahaha package."""
+    # """Manage my hahaha package."""
     click.echo("Alpha Signals Generator of Pit.")
-    # Create the ~/.pit directory if it doesn't exist
-    pit_dir = os.path.join(os.path.expanduser("~"), ".pit")
+    # pit_dir is the directory to store the trading calendar, config file, results of this package.
+    pit_dir = os.path.join(
+        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+
     if not os.path.exists(pit_dir):
         os.makedirs(pit_dir)
         click.echo(f"Created directory: {pit_dir}")
+        default_config = {
+            "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
+            "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
+            "SAVE_DIR": f"{pit_dir}/runs",
+        }
+        
+        with open(f"{pit_dir}/config.yml", "w") as f:
+            yaml.dump(default_config, f)
     else:
         pass
         # click.echo(f"Directory already exists: {pit_dir}")
