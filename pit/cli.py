@@ -79,18 +79,22 @@ def pit():
     if not os.path.exists(pit_dir):
         os.makedirs(pit_dir)
         click.echo(f"Created directory: {pit_dir}")
+
+    else:
+        pass
+        # click.echo(f"Directory already exists: {pit_dir}")
+    
+    if not os.path.exists(f"{pit_dir}/config.yml"):
+        click.echo(f"Generating default config file at {pit_dir}/config.yml")
+        
         default_config = {
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
             "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
             "SAVE_DIR": f"{pit_dir}/runs",
         }
         
-        with open(f"{pit_dir}/config.yml", "w") as f:
-            yaml.dump(default_config, f)
-    else:
-        pass
-        # click.echo(f"Directory already exists: {pit_dir}")
-    
+        cfg = OmegaConf.create(default_config)
+        OmegaConf.save(cfg, f"{pit_dir}/config.yml")
 
 
 # pit.add_command(data)
