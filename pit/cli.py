@@ -77,7 +77,7 @@ def inference(prod, infer_date):
     )
     
     pit_dir = os.path.join(os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFERENCE_DIR)
+    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFER_DIR)
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
     
