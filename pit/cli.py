@@ -52,7 +52,6 @@ def train_single(prod, milestone):
 @click.command()
 @click.option('--prod', default='1030', help='product to infer')
 @click.option('--infer_date', default='today', help='inference date ')
-@click.option('--mode', default='offline', help='inference mode')
 def inference(prod, infer_date):
     """cli command to train single model of given prod and milestone.
     """
