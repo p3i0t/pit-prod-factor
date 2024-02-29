@@ -189,7 +189,7 @@ def load_and_process_online_stock_df(
 ) -> pl.DataFrame:
     import importlib
     import itertools
-    import pandas as pd
+    # import pandas as pd
     # from optimus.data.downsample import bars_ops_combinations
 
     cols = get_bars(feature_set='v2')
@@ -211,48 +211,55 @@ def load_and_process_online_stock_df(
         start=x_begin, end=x_end, freq_in_min=1
     )
 
-    df_univ: pd.DataFrame = dr.read(
+    df_univ: pl.DataFrame = dr.read(
         dr.m.StockUniverse(universe),
         begin=infer_begin,
         end=infer_end,
+        df_lib='polars'
     )
 
     s = perf_counter()
-    df_1min: pd.DataFrame = dr.read(
+    df_1min: pl.DataFrame = dr.read(
         dr.meta.StockMinute(columns=cols, version="2", abbr=True, production=True),
         begin=infer_begin,
         end=infer_end,
         at=slots_1min,
+        df_lib='polars'
     )
     t = perf_counter() - s
     online_logger.info(f"read 1min bars from datareader, time elapsed: {t:.2f}s")
-    if df_1min.empty:
+    if df_1min.shape[0] == 0:
         online_logger.error("no 1min bars available.")
         # return None
 
-    df_1min = df_univ.merge(df_1min, on=["date", "symbol"], how="left")
+    df_1min = df_univ.join(df_1min, on=["date", "symbol"], how="left")
     if debug is True:
         print("df_1min:", df_1min[['date', 'symbol']].dtypes)
 
     # get full valid universe, i.e. symbols with complete 1min bars
-    bar_cnt = df_1min[["symbol", "time"]].groupby("symbol").agg("count")
-    bar_cnt = bar_cnt[bar_cnt["time"] == len(slots_1min)].reset_index()
-    df_1min = df_1min[df_1min["symbol"].isin(bar_cnt["symbol"])]
+    symbols_complete: pl.Series = (
+        df_1min
+        .select(['symbol', 'time']).group_by('symbol')
+        .agg(pl.col('time').count().alias('count'))
+        .filter(pl.col('count') == len(slots_1min))
+        .get_column('symbol')
+        )
+    df_1min = df_1min.filter(pl.col('symbol').is_in(symbols_complete))
+    # bar_cnt = df_1min[["symbol", "time"]].groupby("symbol").agg("count")
+    # bar_cnt = bar_cnt[bar_cnt["time"] == len(slots_1min)].reset_index()
+    # df_1min = df_1min[df_1min["symbol"].isin(bar_cnt["symbol"])]
+    if debug is True:
+        print("pl.df from pandas:", df_1min.select(["date", "symbol"]).head(5))
 
     online_logger.info(f"valid 1min bars dataframe selected, shape: {df_1min.shape}")
-    # online_logger.info(df_1min.head(20))
-    # df_1min.to_parquet(f"{self.infer_date}.parq")
 
     s = perf_counter()
     meta_cols = ["date", "symbol", "time"]
     expr_list, agg_columns = bars_ops_combinations(cols, ops=["mean", "std"])
     expr_list.append(pl.col("time").count().alias("count"))  # for debug
 
-    df = pl.from_pandas(df_1min)
-    if debug is True:
-        print("pl.df from pandas:", df.select(["date", "symbol"]).head(5))
     df = (
-        df.lazy()
+        df_1min.lazy()
         .sort(by=meta_cols)
         .group_by_dynamic(
             index_column="time",
@@ -274,7 +281,6 @@ def load_and_process_online_stock_df(
     )
     t = perf_counter() - s
     online_logger.info(f"downsampling, time elapsed: {t:.2f}s")
-
     data_complete = all(df.select(pl.col("count") == 10).to_series().to_list())
     online_logger.info(f"all window has complete 10 minute bars: {data_complete}")
 
