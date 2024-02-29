@@ -40,6 +40,7 @@ def train_single(prod, milestone):
     # os.environ['CALENDAR_PATH'] = config['CALENDAR_PATH']
     # os.environ['SAVE_DIR'] = config['SAVE_DIR']
     
+    
     valid_prods = list_prods()
     if prod not in valid_prods:
         raise ValueError(f"prod {prod} not in {valid_prods}")
@@ -85,7 +86,7 @@ def pit():
         # click.echo(f"Directory already exists: {pit_dir}")
     
     if not os.path.exists(f"{pit_dir}/config.yml"):
-        click.echo(f"Generating default config file at {pit_dir}/config.yml")
+        click.echo(f"Config file missing! generating default config file at {pit_dir}/config.yml")
         
         default_config = {
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
@@ -95,6 +96,13 @@ def pit():
         
         cfg = OmegaConf.create(default_config)
         OmegaConf.save(cfg, f"{pit_dir}/config.yml")
+        
+    # ToDO: update calendar.pkl
+    # if not os.path.exists(f"{pit_dir}/calendar.pkl"):
+    #     click.echo(f"Generating default calendar file at {pit_dir}/calendar.pkl")
+    #     from pit.utils import update_calendar
+    #     trade_dates = update_calendar()
+    #     pickle.dump(trade_dates, open(f"{pit_dir}/calendar.pkl", 'wb'))
 
 
 # pit.add_command(data)

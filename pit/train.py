@@ -108,6 +108,8 @@ class TrainPipeline:
         )
 
     def run(self):
+        logger.add(sink=f"{self.args.milestone_dir}/train.log", level="INFO")
+        logger.info("start training pipeline.")
         train_set, eval_set, test_set = self.split_data()
         
         # normalize
