@@ -185,6 +185,7 @@ def load_and_process_online_stock_df(
     x_range: Tuple[str, str],
     universe: str,
     date_range: Optional[tuple[Datetime, Datetime]]=None,
+    debug=False,
 ) -> pl.DataFrame:
     import importlib
     import itertools
@@ -230,6 +231,8 @@ def load_and_process_online_stock_df(
         # return None
 
     df_1min = df_univ.merge(df_1min, on=["date", "symbol"], how="left")
+    if debug is True:
+        print("df_1min:", df_1min[['date', 'symbol']].dtypes)
 
     # get full valid universe, i.e. symbols with complete 1min bars
     bar_cnt = df_1min[["symbol", "time"]].groupby("symbol").agg("count")
@@ -246,6 +249,8 @@ def load_and_process_online_stock_df(
     expr_list.append(pl.col("time").count().alias("count"))  # for debug
 
     df = pl.from_pandas(df_1min)
+    if debug is True:
+        print("pl.df from pandas:", df.select(["date", "symbol"]).head(5))
     df = (
         df.lazy()
         .sort(by=meta_cols)
@@ -276,7 +281,11 @@ def load_and_process_online_stock_df(
     # long to wide
     s = perf_counter()
     slots = df.get_column("slot").unique().sort().to_list()
+    if debug is True:
+        print("df after downsample:", df.select(["date", "symbol"]).head(5))
     df = df.pivot(index=["symbol", "date"], columns="slot", values=agg_columns)
+    if debug is True:
+        print("df after pivot:", df.select(["date", "symbol"]).head(5))
     name_mapping = {
         f"{col}_slot_{slt}": f"{col}_{slt}"
         for col, slt in itertools.product(agg_columns, slots)
@@ -335,6 +344,7 @@ def infer(
             x_range=(args.x_begin, args.x_end),
             universe=args.universe,
             date_range=(begin, end),
+            debug=debug,
         )
     else:
         raise ValueError(f"mode: {mode} not supported.")
