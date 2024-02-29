@@ -731,7 +731,7 @@ def get_prod_data_config(
             'x_begin': "1300", 
             'x_end': "1500",
             'freq': 10,
-            'ret_prefix': "next_rtn_v2v_",
+            'ret_prefix': "lag_rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
             }
@@ -741,9 +741,9 @@ def get_prod_data_config(
             'x_begin': "1300", 
             'x_end': "1500",
             'freq': 10,
-            'ret_prefix': "next_rtn_v2v_",
+            'ret_prefix': "lag_",
             'ret_durations': ['1h'],
-            'delay': 5,
+            'delay': 0,
             }
     elif prod == ProdsAvailable.PROD_1030:
         cfg = {
@@ -761,9 +761,9 @@ def get_prod_data_config(
             'x_begin': "0930", 
             'x_end': "1030",
             'freq': 10,
-            'ret_prefix': "rtn_v2v_",
+            'ret_prefix': "",
             'ret_durations': ['1h'],
-            'delay': 5,
+            'delay': 0,
             }
     elif prod == ProdsAvailable.PROD_1300:
         cfg = {
@@ -781,9 +781,9 @@ def get_prod_data_config(
             'x_begin': "0930", 
             'x_end': "1300",
             'freq': 10,
-            'ret_prefix': "rtn_v2v_",
+            'ret_prefix': "",
             'ret_durations': ['1h'],
-            'delay': 5,
+            'delay': 0,
             }
     elif prod == ProdsAvailable.PROD_1400:
         cfg = {
@@ -801,9 +801,9 @@ def get_prod_data_config(
             'x_begin': "1030", 
             'x_end': "1400",
             'freq': 10,
-            'ret_prefix': "rtn_v2v_",
+            'ret_prefix': "",
             'ret_durations': ['1h'],
-            'delay': 5,
+            'delay': 0,
             } 
     else:
         raise ValueError(f"prod {prod} not supported")
