@@ -51,24 +51,40 @@ def train_single(prod, milestone):
     
 @click.command()
 @click.option('--prod', default='1030', help='product to infer')
-@click.option('--infer_date', default='today', help='inference date ')
+@click.option('--infer_date', default='today', help='the date of data used for inference.')
 def inference(prod, infer_date):
     """cli command to train single model of given prod and milestone.
+    
+    For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
+    import sys
     from pit import get_inference_config, list_prods
     from pit.inference import infer, InferenceDataSource
+    from pit.utils import normalize_date
     import polars as pl
     from datetime import timedelta
     from pathlib import Path
+    import genutils as gu
     
+    infer_date = normalize_date(infer_date).strftime('%Y-%m-%d')
     valid_prods = list_prods()
     if prod not in valid_prods:
         raise ValueError(f"prod {prod} not in {valid_prods}")
     args = get_inference_config(prod=prod)
-    o = infer(args=args, infer_date=infer_date, mode=InferenceDataSource.online, debug=False)
     
+    if len(gu.tcalendar.get(infer_date, infer_date)) == 0:
+        print(f"generate date {infer_date} is not a trading date !!!")
+        sys.exit(0)
+    
+    o = infer(args=args, infer_date=infer_date, mode=InferenceDataSource.online, debug=False)
+    assert isinstance(o, pl.DataFrame)
+    if prod in ['0930', '0930_1h']:
+        next_date = gu.tcalendar.adjust(infer_date, 1)
+        # replace date with next_date
+        o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias('date'))
+
     slot = args.y_slots
-    assert isinstance(slot, str) and isinstance(o, pl.DataFrame)
+    assert isinstance(slot, str)
     o = o.with_columns(
         pl.col('date')
         .cast(pl.Datetime(time_unit='ns'))
