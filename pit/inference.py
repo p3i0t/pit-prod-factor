@@ -338,6 +338,8 @@ def infer(
         )
     else:
         raise ValueError(f"mode: {mode} not supported.")
+    if debug is True:
+        print("input:", df.select(['date', 'symbol']).head(5))
     
     ip = InferencePipeline(args=args)
     if debug is True:
