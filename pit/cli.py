@@ -49,25 +49,47 @@ def train_single(prod, milestone):
     pipe.run()
     
     
-# @click.command()
-# @click.option('--prod', default='1030', help='product to infer')
-# @click.option('--infer_date', default='today', help='inference date ')
-# @click.option('--mode', default='offline', help='inference mode')
-# def inference(prod, infer_date):
-#     """cli command to train single model of given prod and milestone.
-#     """
-#     from pit import get_inference_config, list_prods
-#     from pit.inference import infer, InferenceDataSource
+@click.command()
+@click.option('--prod', default='1030', help='product to infer')
+@click.option('--infer_date', default='today', help='inference date ')
+@click.option('--mode', default='offline', help='inference mode')
+def inference(prod, infer_date):
+    """cli command to train single model of given prod and milestone.
+    """
+    from pit import get_inference_config, list_prods
+    from pit.inference import infer, InferenceDataSource
+    import polars as pl
+    from datetime import timedelta
+    from pathlib import Path
     
-#     os.environ['DATASET_DIR'] = '/data2/private/wangxin/dataset/10m_v2'
-#     os.environ['CALENDAR_PATH'] = 'calendar.pkl'
-#     os.environ['SAVE_DIR'] = 'pit_runs'
+    valid_prods = list_prods()
+    if prod not in valid_prods:
+        raise ValueError(f"prod {prod} not in {valid_prods}")
+    args = get_inference_config(prod=prod)
+    o = infer(args=args, infer_date=infer_date, mode=InferenceDataSource.online, debug=False)
     
-#     valid_prods = list_prods()
-#     if prod not in valid_prods:
-#         raise ValueError(f"prod {prod} not in {valid_prods}")
-#     args = get_inference_config(prod=prod)
-#     infer(args=args, infer_date=infer_date, mode=InferenceDataSource.offline)
+    slot = args.y_slots
+    assert isinstance(slot, str) and isinstance(o, pl.DataFrame)
+    o = o.with_columns(
+        pl.col('date')
+        .cast(pl.Datetime(time_unit='ns'))
+        .add(timedelta(hours=int(slot[:2]), minutes=int(slot[2:])))
+        .alias('time')
+    )
+    
+    pit_dir = os.path.join(os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFERENCE_DIR)
+    tgt_dir = infer_dir.joinpath(prod)
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+    
+    alpha_col = [col for col in o.columns if col.endswith('2D')]
+    assert len(alpha_col) == 1
+    alpha_col = alpha_col[0]
+    
+    alpha = o.select(['date', 'time', 'symbol', alpha_col]).rename(mapping={alpha_col: 'pit'})
+    alpha.write_parquet(tgt_dir.joinpath(f"{infer_date}.parq"))
+    
+    
 
 @click.group()
 def pit():
@@ -92,6 +114,7 @@ def pit():
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
             "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
             "SAVE_DIR": f"{pit_dir}/runs",
+            "INFER_DIR": f"{pit_dir}/inference",
         }
         
         cfg = OmegaConf.create(default_config)
@@ -107,6 +130,7 @@ def pit():
 
 # pit.add_command(data)
 pit.add_command(train_single)
+pit.add_command(inference)
 
 if __name__ == "__main__":
     pit()
