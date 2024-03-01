@@ -1,6 +1,6 @@
 from enum import Enum
 import os
-from typing import Optional
+from typing import Optional, Literal
 
 from dlkit.train import TrainArguments
 from dlkit.inference import InferenceArguments
@@ -641,7 +641,7 @@ excluded_bars = [
 ]
 
 
-def get_bars(feature_set: str = 'v2_agg') -> list[str]:
+def get_bars(feature_set: Literal['v2_agg', 'v2', 'v3'] = 'v2_agg') -> list[str]:
     """get list of bars(features) from name.
 
     Args:
@@ -661,7 +661,9 @@ def get_bars(feature_set: str = 'v2_agg') -> list[str]:
     elif feature_set == 'v2':
         bars = sorted(set(bar_v2) - set(excluded_bars))
         return bars
-
+    elif feature_set == 'v3':
+        bars = sorted(set(bar_v3) - set(excluded_bars))
+        return bars
     else:
         raise ValueError(f"feature_set {feature_set} not supported")
     

@@ -1,7 +1,137 @@
 import os
 import click
 from omegaconf import OmegaConf
-# from typing import Literal
+from typing import Literal
+from loguru import logger
+
+@click.command()
+@click.option(
+    "--dir",
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(exists=True),
+    help="parent directory to store data.",
+)
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=str,
+    help="begin date, e.g. 20210101, 2021-01-01.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=str,
+    help="end date, e.g. 20231001, 2023-10-01, or `today`.",
+)
+@click.option(
+    "--item",
+    default="univ",
+    type=str,
+    help="item name to download, one of `bar_1m`, `univ`, `return`, `lag_return`.",
+)
+@click.option("--n_jobs", default=10, type=int, help="number of parallel jobs at most.")
+def download(
+    dir: str,
+    begin: str,
+    end: str,
+    item: Literal["bar_1min", "univ", "return", "lag_return"],
+    n_jobs: int,
+):
+    """Manage data for pit."""
+    from pathlib import Path
+    from datetime import datetime, timedelta
+    
+    import ray
+    import polars as pl
+    from pit import get_bars
+    from pit.utils import any2date
+    from pit.data import BopuDataReader
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Download {item} to directory={_dir}")
+    if datetime.now().strftime("%H%M") < "1530":
+        hard_end = datetime.now() - timedelta(hours=24)
+    else:
+        hard_end = datetime.now()
+    _end = min(any2date(end), any2date(hard_end))
+
+    try:
+        import genutils as gu
+    except ImportError:
+        raise ImportError("Please install genutils first.")
+    import os
+
+    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+
+    item_dir = _dir.joinpath(item)
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    if item == "return" or item == "lag_return":
+        existing_dates = sorted(existing_dates)[:-6]
+    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(trading_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.now().date()}")
+        return
+    click.echo(
+        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
+    )
+
+    reader = BopuDataReader()
+    from functools import partial
+
+    fn_dict: dict[str, callable] = {
+        "bar_1m": partial(reader.fetch_1min_bars, cols=get_bars("v3")),
+        "univ": reader.fetch_univs,
+        # 'lag': bopu_reader.fetch_lag,
+        "return": partial(reader.fetch_returns, n_list=[1, 2, 5]),
+        "lag_return": partial(reader.fetch_lag_returns, n_list=[1, 2, 5]),
+    }
+
+    ray.init(num_cpus=n_jobs, ignore_reinit_error=True)
+    @ray.remote(max_calls=2)
+    def wrap_with_save(fn: callable[[...], pl.DataFrame], begin: str, end: str, /) -> str:
+        df: pl.DataFrame = fn(begin=begin, end=end)
+        
+        res_list = []
+        for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+            _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+            res_list.append(d)
+            
+        # if item == "lag_return":
+        #     prev = df["date"].dt.strftime("%Y-%m-%d").unique()
+        #     assert len(prev) == 1
+        #     prev = prev.item()
+        #     df.to_parquet(f"{item_dir}/{prev}.parq")
+        # else:
+        #     df.to_parquet(f"{item_dir}/{date}.parq")
+        # return date
+
+    if item == 'bar_1min':
+        task_ids = []
+        n_task_finished = 0
+        for exp_id, d in enumerate(trading_dates, 1):
+            task_id = wrap_with_save.options(
+                name="x",
+                num_cpus=1,
+            ).remote(fn=fn_dict[item], begin=d, end=d)
+            task_ids.append(task_id)
+
+            if len(task_ids) >= n_jobs:
+                dones, task_ids = ray.wait(task_ids, num_returns=1)
+                ray.get(dones)
+                n_task_finished += 1
+                logger.info(f"{n_task_finished} tasks finished.")
+        ray.get(task_ids)
+    else:
+        task_id = wrap_with_save.options(
+            name='x'
+            ).remote(fn=fn_dict[item], begin=trading_dates[0], end=trading_dates[-1])
+        ray.get(task_id)
+    click.echo(f"{item} done.")
 
 
 # @click.command()

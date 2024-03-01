@@ -5,22 +5,11 @@ import polars as pl
 import dateutil.parser
 
 
-__all__ = ["Datetime",'normalize_date', 'process_offline_stock_df']
+__all__ = ['any2datetime', 'any2date', 'any2ymd', 'process_offline_stock_df']
 
 Datetime = TypeVar('Datetime', str, datetime.datetime)
 
-def normalize_date(dt: Datetime = 'today') -> datetime.datetime:
-    """Normalize input to be a datetime.datetime object if possible.
-
-    Args:
-        dt (Datetime): input date.
-
-    Raises:
-        TypeError: input argument type is not one of (str, datetime.datetime).
-
-    Returns:
-        datetime.datetime: output object.
-    """    
+def any2datetime(dt: int | str | datetime.datetime) -> datetime.datetime:
     if isinstance(dt, str):
         if dt == 'today':
             o = datetime.datetime.now()
@@ -31,6 +20,45 @@ def normalize_date(dt: Datetime = 'today') -> datetime.datetime:
     else:
         raise TypeError(f"dt type {type(dt)} not supported.")
     return o
+
+
+
+def any2date(ts_input) -> datetime.date:
+    return any2datetime(ts_input).date()
+
+
+def any2ymd(ts_input) -> str:
+    return any2date(ts_input).strftime("%Y-%m-%d")
+
+
+# def any2time(ts_input) -> datetime.time:
+#     return any2datetime(ts_input).time()
+
+# def any2hm(ts_input) -> str:
+
+
+# def normalize_date(dt: Datetime = 'today') -> datetime.datetime:
+#     """Normalize input to be a datetime.datetime object if possible.
+
+#     Args:
+#         dt (Datetime): input date.
+
+#     Raises:
+#         TypeError: input argument type is not one of (str, datetime.datetime).
+
+#     Returns:
+#         datetime.datetime: output object.
+#     """    
+#     if isinstance(dt, str):
+#         if dt == 'today':
+#             o = datetime.datetime.now()
+#         else:
+#             o = dateutil.parser.parse(dt)
+#     elif isinstance(dt, datetime.datetime):
+#         o = dt
+#     else:
+#         raise TypeError(f"dt type {type(dt)} not supported.")
+#     return o
 
 
 def process_offline_stock_df(
@@ -69,8 +97,8 @@ def process_offline_stock_df(
     df = df.select(columns)  
     if date_range:
         begin, end = date_range
-        begin = normalize_date(begin)
-        end = normalize_date(end)
+        begin = any2date(begin)
+        end = any2date(end)
         if date_col is None:
             raise ValueError("date_col should not be None if date_range is not None.")
         else:
