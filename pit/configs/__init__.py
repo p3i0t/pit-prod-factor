@@ -841,8 +841,10 @@ _default_config = {
 def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Optional[str] = None) -> TrainArguments:
     if prod is None:
         raise ValueError("prod must be specified")
+    from pit.utils import any2ymd
     if milestone is None:
-        raise ValueError("milestone must be specified")
+        milestone = any2ymd('today')
+        # raise ValueError("milestone must be specified")
     
     # Get absolute path to the directory this script (or module) is in
     # script_dir = os.path.dirname(os.path.realpath(__file__))
