@@ -1,15 +1,17 @@
-from typing import TypeVar, Optional
+from typing import TypeVar, Optional, Annotated
 import datetime
 
 import polars as pl
 import dateutil.parser
 
-
 __all__ = ['any2datetime', 'any2date', 'any2ymd', 'process_offline_stock_df']
 
-Datetime = TypeVar('Datetime', str, datetime.datetime)
+Datetime = TypeVar('Datetime', 
+                   Annotated[str, "string like '20220201', '2022-02-01' or 'today'."], 
+                   datetime.datetime, 
+                   Annotated[int, "int like 20220201."])
 
-def any2datetime(dt: int | str | datetime.datetime) -> datetime.datetime:
+def any2datetime(dt: Datetime) -> datetime.datetime:
     if isinstance(dt, str):
         if dt == 'today':
             o = datetime.datetime.now()
@@ -21,45 +23,16 @@ def any2datetime(dt: int | str | datetime.datetime) -> datetime.datetime:
         raise TypeError(f"dt type {type(dt)} not supported.")
     return o
 
-
-
 def any2date(ts_input) -> datetime.date:
     return any2datetime(ts_input).date()
 
-
 def any2ymd(ts_input) -> str:
     return any2date(ts_input).strftime("%Y-%m-%d")
-
 
 # def any2time(ts_input) -> datetime.time:
 #     return any2datetime(ts_input).time()
 
 # def any2hm(ts_input) -> str:
-
-
-# def normalize_date(dt: Datetime = 'today') -> datetime.datetime:
-#     """Normalize input to be a datetime.datetime object if possible.
-
-#     Args:
-#         dt (Datetime): input date.
-
-#     Raises:
-#         TypeError: input argument type is not one of (str, datetime.datetime).
-
-#     Returns:
-#         datetime.datetime: output object.
-#     """    
-#     if isinstance(dt, str):
-#         if dt == 'today':
-#             o = datetime.datetime.now()
-#         else:
-#             o = dateutil.parser.parse(dt)
-#     elif isinstance(dt, datetime.datetime):
-#         o = dt
-#     else:
-#         raise TypeError(f"dt type {type(dt)} not supported.")
-#     return o
-
 
 def process_offline_stock_df(
     df: pl.LazyFrame, 
@@ -104,7 +77,6 @@ def process_offline_stock_df(
         else:
             if date_col not in columns:
                 raise ValueError(f"date_col {date_col} not available in columns.")
-            
         df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
     if fill_nan:
         df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))

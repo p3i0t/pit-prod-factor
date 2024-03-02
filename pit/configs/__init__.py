@@ -733,9 +733,10 @@ def get_prod_data_config(
             'x_begin': "1300", 
             'x_end': "1500",
             'freq': 10,
-            'ret_prefix': "lag_rtn_v2v_",
+            'ret_prefix': "rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
+            'tgt_column': 'rtn_v2v_0935_2D',
             }
     elif prod == ProdsAvailable.PROD_0930_1H:
         cfg = {
@@ -746,6 +747,7 @@ def get_prod_data_config(
             'ret_prefix': "lag_",
             'ret_durations': ['1h'],
             'delay': 0,
+            'tgt_column': 'lag_0935_1h',
             }
     elif prod == ProdsAvailable.PROD_1030:
         cfg = {
@@ -756,6 +758,7 @@ def get_prod_data_config(
             'ret_prefix': "rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
+            'tgt_column': 'rtn_v2v_1035_2D',
             }
     elif prod == ProdsAvailable.PROD_1030_1H:
         cfg = {
@@ -766,6 +769,7 @@ def get_prod_data_config(
             'ret_prefix': "",
             'ret_durations': ['1h'],
             'delay': 0,
+            'tgt_column': '1030_1h',
             }
     elif prod == ProdsAvailable.PROD_1300:
         cfg = {
@@ -776,6 +780,7 @@ def get_prod_data_config(
             'ret_prefix': "rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
+            'tgt_column': 'rtn_v2v_1305_2D',
             }
     elif prod == ProdsAvailable.PROD_1300_1H:
         cfg = {
@@ -786,6 +791,7 @@ def get_prod_data_config(
             'ret_prefix': "",
             'ret_durations': ['1h'],
             'delay': 0,
+            'tgt_column': '1300_1h',
             }
     elif prod == ProdsAvailable.PROD_1400:
         cfg = {
@@ -796,6 +802,7 @@ def get_prod_data_config(
             'ret_prefix': "rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
+            'tgt_column': 'rtn_v2v_1405_2D',
             }
     elif prod == ProdsAvailable.PROD_1400_1H:
         cfg = {
@@ -806,6 +813,7 @@ def get_prod_data_config(
             'ret_prefix': "",
             'ret_durations': ['1h'],
             'delay': 0,
+            'tgt_column': '1400_1h',
             } 
     else:
         raise ValueError(f"prod {prod} not supported")
@@ -941,5 +949,6 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         model=cfg.model,
         n_latest=3,
         device='cuda',
+        tgt_column=cfg.tgt_column,
     )
     return args

@@ -17,7 +17,7 @@ from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.data import ParquetStockSource
 from dlkit.utils import get_time_slots, CHECHPOINT_META
-from pit.utils import normalize_date, process_offline_stock_df, Datetime
+from pit.utils import any2datetime, process_offline_stock_df, Datetime
 from pit import get_bars
 
 logger = logger.bind(where="inference")
@@ -320,13 +320,13 @@ def infer(
     infer_logger = logger.bind(where="inference")
     # construct data source
     if isinstance(infer_date, str):
-        o = normalize_date(infer_date)
+        o = any2datetime(infer_date)
         begin, end = o, o
         infer_logger.info(f"{mode} inference on date: {o}")
     elif isinstance(infer_date, tuple):
         begin, end = infer_date
-        begin = normalize_date(begin)
-        end = normalize_date(end)
+        begin = any2datetime(begin)
+        end = any2datetime(end)
         infer_logger.info(f"{mode} inference on date range: {begin} to {end}")
     else:
         raise TypeError(f"date in InferenceArguments should be str or Tuple[str, str], but is {type(infer_date)}")

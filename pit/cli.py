@@ -177,12 +177,30 @@ def train_single(prod, milestone):
     args = get_training_config(prod=prod, milestone=milestone)
     pipe = TrainPipeline(args)
     pipe.run()
-    
+ 
+@click.command()
+@click.option('--prod', '-p', default='1030', type=str, help='product to train')
+@click.option('--mode', '-m', default='train', type=str, help='train or inference args to show.')
+def show(prod, mode):
+    """cli command to list training or inference args.
+    """
+    from pit import get_training_config, get_inference_config, list_prods
+    valid_prods = list_prods()
+    if prod not in valid_prods:
+        raise ValueError(f"prod {prod} not in {valid_prods}")
+    if mode == 'train':
+        args = get_training_config(prod=prod)
+    elif mode == 'inference':
+        args = get_inference_config(prod=prod)
+    else:
+        raise ValueError(f"mode {mode} not in ['train', 'inference']")
+    print(args)
+
     
 @click.command()
-@click.option('--prod', default='1030', help='product to infer')
-@click.option('--infer_date', default='today', help='the date of data used for inference.')
-def inference(prod, infer_date):
+@click.option('--prod', '-p', default='1030', help='product to infer')
+@click.option('--date', '-d', default='today', help='the date of data used for inference.')
+def inference(prod, date):
     """cli command to train single model of given prod and milestone.
     
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -190,13 +208,13 @@ def inference(prod, infer_date):
     import sys
     from pit import get_inference_config, list_prods
     from pit.inference import infer, InferenceDataSource
-    from pit.utils import normalize_date
+    from pit.utils import any2ymd 
     import polars as pl
     from datetime import timedelta
     from pathlib import Path
     import genutils as gu
     
-    infer_date = normalize_date(infer_date).strftime('%Y-%m-%d')
+    infer_date: str = any2ymd(date)
     valid_prods = list_prods()
     if prod not in valid_prods:
         raise ValueError(f"prod {prod} not in {valid_prods}")
@@ -227,11 +245,7 @@ def inference(prod, infer_date):
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
     
-    alpha_col = [col for col in o.columns if col.endswith('2D')]
-    assert len(alpha_col) == 1
-    alpha_col = alpha_col[0]
-    
-    alpha = o.select(['date', 'time', 'symbol', alpha_col]).rename(mapping={alpha_col: 'pit'})
+    alpha = o.select(['date', 'time', 'symbol', args.tgt_column]).rename(mapping={args.tgt_column: 'pit'})
     alpha.write_parquet(tgt_dir.joinpath(f"{infer_date}.parq"))
     
     
@@ -276,6 +290,7 @@ def pit():
 # pit.add_command(data)
 pit.add_command(train_single)
 pit.add_command(inference)
+pit.add_command(show)
 
 if __name__ == "__main__":
     pit()
