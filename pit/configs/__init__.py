@@ -733,10 +733,10 @@ def get_prod_data_config(
             'x_begin': "1300", 
             'x_end': "1500",
             'freq': 10,
-            'ret_prefix': "rtn_v2v_",
+            'ret_prefix': "lag_rtn_v2v_",
             'ret_durations': ['1D', '2D', '5D'],
             'delay': 5,
-            'tgt_column': 'rtn_v2v_0935_2D',
+            'tgt_column': 'lag_rtn_v2v_0935_2D',
             }
     elif prod == ProdsAvailable.PROD_0930_1H:
         cfg = {
@@ -747,7 +747,7 @@ def get_prod_data_config(
             'ret_prefix': "lag_",
             'ret_durations': ['1h'],
             'delay': 0,
-            'tgt_column': 'lag_0935_1h',
+            'tgt_column': 'lag_0930_1h',
             }
     elif prod == ProdsAvailable.PROD_1030:
         cfg = {
