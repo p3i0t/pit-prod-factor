@@ -109,7 +109,8 @@ def download_bar1m(
             df_lib='polars'
         )
         res_list = []
-        for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        for d, _df in df.partition_by(["date"], as_dict=True).items():
+        # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
         return df
