@@ -21,10 +21,12 @@ class BopuDataReader:
     def fetch_1min_bars(
         self, begin: str, end: str, cols: Optional[list[str]] = None
     ) -> pl.DataFrame:
-        if cols is None:
-            cols = get_bars('v3')
+        # if cols is None:
+        #     cols = get_bars('v3')
         df: pl.DataFrame = self.dr.read(
-            self.dr.meta.StockMinute(columns=cols, version="3", abbr=True),
+            self.dr.meta.StockMinute(
+                # columns=None, 
+                version="3.1", abbr=True),
             begin=begin,
             end=end,
             df_lib='polars'

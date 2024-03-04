@@ -1,7 +1,7 @@
 import os
 import click
 from omegaconf import OmegaConf
-from typing import Literal
+from typing import Literal, Callable
 from loguru import logger
 
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
@@ -101,7 +101,7 @@ def download(
     reader = BopuDataReader()
     from functools import partial
 
-    fn_dict: dict[str, callable] = {
+    fn_dict: dict[str, Callable[..., pl.DataFrame]] = {
         "bar_1m": partial(reader.fetch_1min_bars, cols=get_bars("v3")),
         "univ": reader.fetch_univs,
         # 'lag': bopu_reader.fetch_lag,
@@ -109,9 +109,9 @@ def download(
         "lag_return": partial(reader.fetch_lag_returns, n_list=[1, 2, 5]),
     }
 
-    ray.init(num_cpus=n_jobs, ignore_reinit_error=True)
+    ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
     @ray.remote(max_calls=2)
-    def wrap_with_save(fn: callable[[...], pl.DataFrame], begin: str, end: str, /) -> str:
+    def wrap_with_save(fn: Callable[..., pl.DataFrame], begin: str, end: str, /) -> None:
         df: pl.DataFrame = fn(begin=begin, end=end)
         
         res_list = []
@@ -181,7 +181,7 @@ def train_single(prod, milestone):
               default=click.Choice(list_prods()),
               help='product to infer')
 @click.option('--mode', '-m', default='train', 
-              type=click.Choice(['train', 'inference']), case_sensitive=True,
+              type=click.Choice(['train', 'inference']),
               help='train or inference args to show.')
 def show(prod, mode):
     """cli command to list training or inference args.
