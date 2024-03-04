@@ -41,33 +41,25 @@ DateType = ExtendedDate()
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option(
-    "--item",
-    default="univ",
-    type=click.Choice(["bar_1m", "univ", "return", "lag_return"]),
-    help="item name to download, one of `bar_1m`, `univ`, `return`, `lag_return`.",
-)
 @click.option("--n_jobs", default=10, type=int, 
               help="number of ray parallel jobs at most, only used for bar_1min.")
-def download(
+def download_bar1m(
     dir: str,
     begin: str,
     end: str,
-    item: Literal["bar_1m", "univ", "return", "lag_return"],
     n_jobs: int,
 ):
-    """Manage data for pit."""
+    """Download 1min bars."""
     from pathlib import Path
     from datetime import datetime, timedelta
     
     import ray
     import polars as pl
     from pit.utils import any2date
-    from pit.data import BopuDataReader
 
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Download {item} to directory={_dir}")
+    logger.info(f"Download 1min bars to directory={_dir}")
     if datetime.now().strftime("%H%M") < "1530":
         hard_end = datetime.now() - timedelta(hours=24)
     else:
@@ -83,12 +75,13 @@ def download(
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
 
+    item = 'bar_1m'
     item_dir = _dir.joinpath(item)
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    if item == "return" or item == "lag_return":
-        existing_dates = sorted(existing_dates)[:-6]
+    # if item == "return" or item == "lag_return":
+    #     existing_dates = sorted(existing_dates)[:-6]
     trading_dates = sorted(set(trading_dates) - set(existing_dates))
 
     if len(trading_dates) == 0:
@@ -98,49 +91,87 @@ def download(
         f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
     )
 
-    reader = BopuDataReader()
-    from functools import partial
-
-    fn_dict: dict[str, Callable[..., pl.DataFrame]] = {
-        "bar_1m": partial(reader.fetch_1min_bars, cols=get_bars("v3")),
-        "univ": reader.fetch_univs,
-        # 'lag': bopu_reader.fetch_lag,
-        "return": partial(reader.fetch_returns, n_list=[1, 2, 5]),
-        "lag_return": partial(reader.fetch_lag_returns, n_list=[1, 2, 5]),
-    }
-
     ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
     @ray.remote(max_calls=2)
-    def wrap_with_save(fn: Callable[..., pl.DataFrame], begin: str, end: str, /) -> None:
-        df: pl.DataFrame = fn(begin=begin, end=end)
+    def remote_download(begin, end) -> pl.DataFrame:
+        try:
+            import datareader as dr
+            dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
+        except ImportError:
+            raise ImportError("Error: module datareader not found")
         
-        res_list = []
-        for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-            _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-            res_list.append(d)
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockMinute(
+                # columns=None, 
+                version="3.1", abbr=True),
+            begin=begin,
+            end=end,
+            df_lib='polars'
+        )
+        # df[cols] = df[cols].astype('float32')
+        # df["symbol"] = df["symbol"].astype("category")
+        # df = df.sort_values(by=['date', 'symbol']).reset_index(drop=True)
+        return df
+        
+    task_ids = []
+    n_task_finished = 0
+    for exp_id, d in enumerate(trading_dates, 1):
+        task_id = remote_download.options(
+            name="x",
+            num_cpus=1,
+        ).remote(begin=d, end=d)
+        task_ids.append(task_id)
 
-    if item == 'bar_1m':
-        task_ids = []
-        n_task_finished = 0
-        for exp_id, d in enumerate(trading_dates, 1):
-            task_id = wrap_with_save.options(
-                name="x",
-                num_cpus=1,
-            ).remote(fn=fn_dict[item], begin=d, end=d)
-            task_ids.append(task_id)
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            logger.info(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+    click.echo(f"task {item} done.")
 
-            if len(task_ids) >= n_jobs:
-                dones, task_ids = ray.wait(task_ids, num_returns=1)
-                ray.get(dones)
-                n_task_finished += 1
-                logger.info(f"{n_task_finished} tasks finished.")
-        ray.get(task_ids)
-    else:
-        task_id = wrap_with_save.options(
-            name='x'
-            ).remote(fn=fn_dict[item], begin=trading_dates[0], end=trading_dates[-1])
-        ray.get(task_id)
-    click.echo(f"{item} done.")
+    # from functools import partial
+
+    # fn_dict: dict[str, Callable[..., pl.DataFrame]] = {
+    #     "bar_1m": partial(reader.fetch_1min_bars, cols=get_bars("v3")),
+    #     "univ": reader.fetch_univs,
+    #     # 'lag': bopu_reader.fetch_lag,
+    #     "return": partial(reader.fetch_returns, n_list=[1, 2, 5]),
+    #     "lag_return": partial(reader.fetch_lag_returns, n_list=[1, 2, 5]),
+    # }
+
+
+    # @ray.remote(max_calls=2)
+    # def wrap_with_save(fn: Callable[..., pl.DataFrame], begin: str, end: str) -> None:
+    #     df: pl.DataFrame = fn(begin=begin, end=end)
+        
+    #     res_list = []
+    #     for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+    #         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+    #         res_list.append(d)
+
+    # if item == 'bar_1m':
+    #     task_ids = []
+    #     n_task_finished = 0
+    #     for exp_id, d in enumerate(trading_dates, 1):
+    #         task_id = wrap_with_save.options(
+    #             name="x",
+    #             num_cpus=1,
+    #         ).remote(fn=fn_dict[item], begin=d, end=d)
+    #         task_ids.append(task_id)
+
+    #         if len(task_ids) >= n_jobs:
+    #             dones, task_ids = ray.wait(task_ids, num_returns=1)
+    #             ray.get(dones)
+    #             n_task_finished += 1
+    #             logger.info(f"{n_task_finished} tasks finished.")
+    #     ray.get(task_ids)
+    # else:
+    #     task_id = wrap_with_save.options(
+    #         name='x'
+    #         ).remote(fn=fn_dict[item], begin=trading_dates[0], end=trading_dates[-1])
+    #     ray.get(task_id)
+    # click.echo(f"{item} done.")
 
 
 # @click.command()
@@ -287,7 +318,7 @@ def pit():
 pit.add_command(train_single)
 pit.add_command(inference)
 pit.add_command(show)
-pit.add_command(download)
+pit.add_command(download_bar1m)
 
 if __name__ == "__main__":
     pit()
