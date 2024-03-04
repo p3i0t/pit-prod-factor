@@ -759,6 +759,8 @@ pit.add_command(inference)
 pit.add_command(show)
 pit.add_command(download_1m)
 pit.add_command(download_univ)
+pit.add_command(download_return)
+pit.add_command(download_lag_return)
 
 if __name__ == "__main__":
     pit()
