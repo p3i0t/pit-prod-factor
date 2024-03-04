@@ -119,7 +119,7 @@ def download(
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
 
-    if item == 'bar_1min':
+    if item == 'bar_1m':
         task_ids = []
         n_task_finished = 0
         for exp_id, d in enumerate(trading_dates, 1):
