@@ -287,6 +287,7 @@ def pit():
 pit.add_command(train_single)
 pit.add_command(inference)
 pit.add_command(show)
+pit.add_command(download)
 
 if __name__ == "__main__":
     pit()
