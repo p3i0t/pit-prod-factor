@@ -108,9 +108,10 @@ def download_bar1m(
             end=end,
             df_lib='polars'
         )
-        # df[cols] = df[cols].astype('float32')
-        # df["symbol"] = df["symbol"].astype("category")
-        # df = df.sort_values(by=['date', 'symbol']).reset_index(drop=True)
+        res_list = []
+        for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+            _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+            res_list.append(d)
         return df
         
     task_ids = []
