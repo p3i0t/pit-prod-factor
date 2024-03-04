@@ -44,7 +44,7 @@ DateType = ExtendedDate()
 @click.option(
     "--item",
     default="univ",
-    type=click.Choice(["bar_1min", "univ", "return", "lag_return"]),
+    type=click.Choice(["bar_1m", "univ", "return", "lag_return"]),
     help="item name to download, one of `bar_1m`, `univ`, `return`, `lag_return`.",
 )
 @click.option("--n_jobs", default=10, type=int, 
@@ -53,7 +53,7 @@ def download(
     dir: str,
     begin: str,
     end: str,
-    item: Literal["bar_1min", "univ", "return", "lag_return"],
+    item: Literal["bar_1m", "univ", "return", "lag_return"],
     n_jobs: int,
 ):
     """Manage data for pit."""
