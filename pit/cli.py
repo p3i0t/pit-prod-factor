@@ -42,8 +42,8 @@ DateType = ExtendedDate()
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option("--n_jobs", default=10, type=int, 
-              help="number of ray parallel jobs at most, only used for bar_1min.")
-def download_bar1m(
+              help="number of ray parallel jobs.")
+def download_1m(
     dir: str,
     begin: str,
     end: str,
@@ -132,50 +132,488 @@ def download_bar1m(
     ray.get(task_ids)
     click.echo(f"task {item} done.")
 
-    # from functools import partial
 
-    # fn_dict: dict[str, Callable[..., pl.DataFrame]] = {
-    #     "bar_1m": partial(reader.fetch_1min_bars, cols=get_bars("v3")),
-    #     "univ": reader.fetch_univs,
-    #     # 'lag': bopu_reader.fetch_lag,
-    #     "return": partial(reader.fetch_returns, n_list=[1, 2, 5]),
-    #     "lag_return": partial(reader.fetch_lag_returns, n_list=[1, 2, 5]),
-    # }
+@click.command()
+@click.option(
+    "--path", '-p', "dir",
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(),
+    help="path directory to store the downloaded data, will be created if doesn't exist.",
+)
+
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+def download_univ(
+    dir: str,
+    begin: str,
+    end: str
+):
+    """Download universe."""
+    from pathlib import Path
+    from datetime import datetime, timedelta
+
+    import polars as pl
+    from pit.utils import any2date
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Download 1min bars to directory={_dir}")
+    if datetime.now().strftime("%H%M") < "1530":
+        hard_end = datetime.now() - timedelta(hours=24)
+    else:
+        hard_end = datetime.now()
+    _end = min(any2date(end), any2date(hard_end))
+
+    try:
+        import genutils as gu
+    except ImportError:
+        raise ImportError("Please install genutils first.")
+    import os
+
+    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+
+    item = 'univ'
+    item_dir = _dir.joinpath(item)
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(trading_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.now().date()}")
+        return
+    click.echo(
+        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
+    )
+
+    try:
+        import datareader as dr
+    except ImportError:
+        raise ImportError("Error: module datareader not found")
+    
+
+    univs = [
+        "univ_research",
+        "univ_largemid",
+        "sz50",
+        "hs300",
+        "zz500",
+        "zz1000",
+        "zz2000",
+        "euniv_largemid",
+        "euniv_research",
+        "euniv_eresearch",
+        "univ_full",
+        "mktcap",
+    ]
 
 
-    # @ray.remote(max_calls=2)
-    # def wrap_with_save(fn: Callable[..., pl.DataFrame], begin: str, end: str) -> None:
-    #     df: pl.DataFrame = fn(begin=begin, end=end)
+    df: pl.DataFrame = dr.read(
+        dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars'
+    )
+    df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
+    for d, _df in df.partition_by(["date"], as_dict=True).items():
+    # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
         
-    #     res_list = []
-    #     for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-    #         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    #         res_list.append(d)
-
-    # if item == 'bar_1m':
-    #     task_ids = []
-    #     n_task_finished = 0
-    #     for exp_id, d in enumerate(trading_dates, 1):
-    #         task_id = wrap_with_save.options(
-    #             name="x",
-    #             num_cpus=1,
-    #         ).remote(fn=fn_dict[item], begin=d, end=d)
-    #         task_ids.append(task_id)
-
-    #         if len(task_ids) >= n_jobs:
-    #             dones, task_ids = ray.wait(task_ids, num_returns=1)
-    #             ray.get(dones)
-    #             n_task_finished += 1
-    #             logger.info(f"{n_task_finished} tasks finished.")
-    #     ray.get(task_ids)
-    # else:
-    #     task_id = wrap_with_save.options(
-    #         name='x'
-    #         ).remote(fn=fn_dict[item], begin=trading_dates[0], end=trading_dates[-1])
-    #     ray.get(task_id)
-    # click.echo(f"{item} done.")
+    click.echo(f"task {item} done.")
 
 
+
+
+@click.command()
+@click.option(
+    "--path", '-p', "dir",
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(),
+    help="path directory to store the downloaded data, will be created if doesn't exist.",
+)
+
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+def download_return(
+    dir: str,
+    begin: str,
+    end: str
+):
+    """Download universe."""
+    from pathlib import Path
+    from datetime import datetime, timedelta
+
+    import polars as pl
+    from pit.utils import any2date
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Download 1min bars to directory={_dir}")
+    if datetime.now().strftime("%H%M") < "1530":
+        hard_end = datetime.now() - timedelta(hours=24)
+    else:
+        hard_end = datetime.now()
+    _end = min(any2date(end), any2date(hard_end))
+
+    try:
+        import genutils as gu
+    except ImportError:
+        raise ImportError("Please install genutils first.")
+    import os
+
+    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+
+    item = 'return'
+    item_dir = _dir.joinpath(item)
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(trading_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.now().date()}")
+        return
+    click.echo(
+        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
+    )
+
+    try:
+        import datareader as dr
+    except ImportError:
+        raise ImportError("Error: module datareader not found")
+    
+
+    n_list = [1, 2, 3, 5]
+
+    # delay 5 minutes
+    slots = [
+        ("0935", "1000"),
+        (1005, 1030),
+        (1035, 1100),
+        (1105, 1130),
+        (1305, 1330),
+        (1335, 1400),
+        (1405, 1430),
+        (1435, 1500),
+    ]
+    ret_slots = {}
+    # vwap return
+    for slot in slots:
+        ret_slots[f"_v2v_{slot[0]}"] = (
+            f"vwap_{slot[0]}_{slot[1]}",
+            f"vwap_{slot[0]}_{slot[1]}",
+        )
+    # open-to-open return
+    for slot in slots:
+        ret_slots[f"_o2o_{slot[0]}"] = (f"close_{slot[0]}", f"close_{slot[0]}")
+
+    df: pl.DataFrame = dr.read(
+        dr.m.StockReturnDaily(
+            ret_slots, n_days=n_list, abbr=False, future=True
+        ),
+        begin=begin,
+        end=end,
+        df_lib='polars'
+    )
+        
+    # get intraday returns
+    slots = [
+        "0935",
+        "1005",
+        "1035",
+        "1105",
+        "1305",
+        "1335",
+        "1405",
+        "1435",
+        "1000",
+        "1030",
+        "1100",
+        "1130",
+        "1330",
+        "1400",
+        "1430",
+        "1500",
+    ]
+    df_close: pl.DataFrame = dr.read(
+        dr.m.StockMinute(["close"]),
+        begin=begin,
+        end=end,
+        at=slots,
+        df_lib='polars',
+    )
+    df_close = df_close.with_columns(pl.col('time').dt.strftime("%H%M").alias('slot'))
+        # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
+
+    df_intra = df_close.pivot(
+        values="close", columns="slot", index=["date", "symbol"]
+    )
+    df_intra = df_intra.with_columns(
+        pl.col('1000').truediv(pl.col('0935')).sub(1).alias('0930_30m'),
+        pl.col('1030').truediv(pl.col('1005')).sub(1).alias('1000_30m'),
+        pl.col('1100').truediv(pl.col('1035')).sub(1).alias('1030_30m'),
+        pl.col('1130').truediv(pl.col('1105')).sub(1).alias('1100_30m'),
+        pl.col('1330').truediv(pl.col('1305')).sub(1).alias('1300_30m'),
+        pl.col('1400').truediv(pl.col('1335')).sub(1).alias('1330_30m'),
+        pl.col('1430').truediv(pl.col('1405')).sub(1).alias('1400_30m'),
+        pl.col('1500').truediv(pl.col('1435')).sub(1).alias('1430_30m'),
+        pl.col('1030').truediv(pl.col('0935')).sub(1).alias('0930_1h'),
+        pl.col('1100').truediv(pl.col('1005')).sub(1).alias('1000_1h'),
+        pl.col('1130').truediv(pl.col('1035')).sub(1).alias('1030_1h'),
+        pl.col('1330').truediv(pl.col('1105')).sub(1).alias('1100_1h'),
+        pl.col('1400').truediv(pl.col('1305')).sub(1).alias('1300_1h'),
+        pl.col('1430').truediv(pl.col('1335')).sub(1).alias('1330_1h'),
+        pl.col('1500').truediv(pl.col('1405')).sub(1).alias('1400_1h'),
+    )
+
+    intra_return_cols = [
+        "0930_30m",
+        "1000_30m",
+        "1030_30m",
+        "1100_30m",
+        "1300_30m",
+        "1330_30m",
+        "1400_30m",
+        "1430_30m",
+        "0930_1h",
+        "1000_1h",
+        "1030_1h",
+        "1100_1h",
+        "1300_1h",
+        "1330_1h",
+        "1400_1h",
+    ]
+
+    df = df.join(
+        df_intra.select(intra_return_cols + ["date", "symbol"]),
+        on=["date", "symbol"],
+        how="left",
+    ).sort(by=["date", "symbol"])
+
+    for d, _df in df.partition_by(["date"], as_dict=True).items():
+    # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+    # return df
+    
+    click.echo(f"task {item} done.")
+
+
+
+
+@click.command()
+@click.option(
+    "--path", '-p', "dir",
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(),
+    help="path directory to store the downloaded data, will be created if doesn't exist.",
+)
+
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+def download_lag_return(
+    dir: str,
+    begin: str,
+    end: str
+):
+    """Download universe."""
+    from pathlib import Path
+    from datetime import datetime, timedelta
+
+    import polars as pl
+    from pit.utils import any2date
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Download 1min bars to directory={_dir}")
+    if datetime.now().strftime("%H%M") < "1530":
+        hard_end = datetime.now() - timedelta(hours=24)
+    else:
+        hard_end = datetime.now()
+    _end = min(any2date(end), any2date(hard_end))
+
+    try:
+        import genutils as gu
+    except ImportError:
+        raise ImportError("Please install genutils first.")
+    import os
+
+    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+
+    item = 'lag_return'
+    item_dir = _dir.joinpath(item)
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(trading_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.now().date()}")
+        return
+    click.echo(
+        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
+    )
+
+    try:
+        import datareader as dr
+    except ImportError:
+        raise ImportError("Error: module datareader not found")
+    
+
+    n_list = [1, 2, 3, 5]
+
+    # delay 5 minutes
+    slots = [
+        ("0935", "1000"),
+        (1005, 1030),
+        (1035, 1100),
+        (1105, 1130),
+        (1305, 1330),
+        (1335, 1400),
+        (1405, 1430),
+        (1435, 1500),
+    ]
+    ret_slots = {}
+    # vwap return
+    for slot in slots:
+        ret_slots[f"_v2v_{slot[0]}"] = (
+            f"vwap_{slot[0]}_{slot[1]}",
+            f"vwap_{slot[0]}_{slot[1]}",
+        )
+    # open-to-open return
+    for slot in slots:
+        ret_slots[f"_o2o_{slot[0]}"] = (f"close_{slot[0]}", f"close_{slot[0]}")
+
+    df: pl.DataFrame = dr.read(
+        dr.m.StockReturnDaily(
+            ret_slots, n_days=n_list, abbr=False, future=True
+        ),
+        begin=begin,
+        end=end,
+        df_lib='polars'
+    )
+        
+    # get intraday returns
+    slots = [
+        "0935",
+        "1005",
+        "1035",
+        "1105",
+        "1305",
+        "1335",
+        "1405",
+        "1435",
+        "1000",
+        "1030",
+        "1100",
+        "1130",
+        "1330",
+        "1400",
+        "1430",
+        "1500",
+    ]
+    df_close: pl.DataFrame = dr.read(
+        dr.m.StockMinute(["close"]),
+        begin=begin,
+        end=end,
+        at=slots,
+        df_lib='polars',
+    )
+    df_close = df_close.with_columns(pl.col('time').dt.strftime("%H%M").alias('slot'))
+        # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
+
+    df_intra = df_close.pivot(
+        values="close", columns="slot", index=["date", "symbol"]
+    )
+    df_intra = df_intra.with_columns(
+        pl.col('1000').truediv(pl.col('0935')).sub(1).alias('0930_30m'),
+        pl.col('1030').truediv(pl.col('1005')).sub(1).alias('1000_30m'),
+        pl.col('1100').truediv(pl.col('1035')).sub(1).alias('1030_30m'),
+        pl.col('1130').truediv(pl.col('1105')).sub(1).alias('1100_30m'),
+        pl.col('1330').truediv(pl.col('1305')).sub(1).alias('1300_30m'),
+        pl.col('1400').truediv(pl.col('1335')).sub(1).alias('1330_30m'),
+        pl.col('1430').truediv(pl.col('1405')).sub(1).alias('1400_30m'),
+        pl.col('1500').truediv(pl.col('1435')).sub(1).alias('1430_30m'),
+        pl.col('1030').truediv(pl.col('0935')).sub(1).alias('0930_1h'),
+        pl.col('1100').truediv(pl.col('1005')).sub(1).alias('1000_1h'),
+        pl.col('1130').truediv(pl.col('1035')).sub(1).alias('1030_1h'),
+        pl.col('1330').truediv(pl.col('1105')).sub(1).alias('1100_1h'),
+        pl.col('1400').truediv(pl.col('1305')).sub(1).alias('1300_1h'),
+        pl.col('1430').truediv(pl.col('1335')).sub(1).alias('1330_1h'),
+        pl.col('1500').truediv(pl.col('1405')).sub(1).alias('1400_1h'),
+    )
+
+    intra_return_cols = [
+        "0930_30m",
+        "1000_30m",
+        "1030_30m",
+        "1100_30m",
+        "1300_30m",
+        "1330_30m",
+        "1400_30m",
+        "1430_30m",
+        "0930_1h",
+        "1000_1h",
+        "1030_1h",
+        "1100_1h",
+        "1300_1h",
+        "1330_1h",
+        "1400_1h",
+    ]
+
+    df = df.join(
+        df_intra.select(intra_return_cols + ["date", "symbol"]),
+        on=["date", "symbol"],
+        how="left",
+    ).sort(by=["date", "symbol"])
+
+    cols = ["date", "prev", "next"]
+    date_lag = gu.tcalendar.getdf(begin=begin, end=end, renew=False)[cols]
+    date_lag = pl.from_dataframe(date_lag)
+    df_lag = df.join(date_lag, on="date", how="left")
+    df_lag = df_lag.drop(["date", "next"])
+    df_lag = df_lag.rename({"prev": "date"})
+    cols_rename = {
+        col: f"lag_{col}" for col in df.columns if col not in ["date", "symbol"]
+    }
+    df_lag = df_lag.rename(mapping=cols_rename)
+        
+    for d, _df in df_lag.partition_by(["date"], as_dict=True).items():
+    # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+    # return df
+    
+    click.echo(f"task {item} done.")
+    
 # @click.command()
 # @click.option('--source', default='bopu', help='source of calendar data')
 # def update_calendar(source: Literal['akshare', 'bopu'] = 'bopu'):
@@ -208,6 +646,7 @@ def train_single(prod, milestone):
     args = get_training_config(prod=prod, milestone=milestone)
     pipe = TrainPipeline(args)
     pipe.run()
+ 
  
 @click.command()
 @click.option('--prod', '-p', 
@@ -315,12 +754,11 @@ def pit():
     #     trade_dates = update_calendar()
     #     pickle.dump(trade_dates, open(f"{pit_dir}/calendar.pkl", 'wb'))
 
-
-# pit.add_command(data)
 pit.add_command(train_single)
 pit.add_command(inference)
 pit.add_command(show)
-pit.add_command(download_bar1m)
+pit.add_command(download_1m)
+pit.add_command(download_univ)
 
 if __name__ == "__main__":
     pit()
