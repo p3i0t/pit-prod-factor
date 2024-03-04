@@ -4,32 +4,51 @@ from omegaconf import OmegaConf
 from typing import Literal
 from loguru import logger
 
+from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
+from pit.utils import any2ymd
+
+
+# self-defined click ParamType by overriding the convert() method 
+# to convert the value (as str) to the desired type (date str)
+class ExtendedDate(click.ParamType):
+    name = 'date'
+    def convert(self, value, param, ctx):
+        try:
+            return any2ymd(str(value))
+        except ValueError:
+            self.fail(f"{value} is not a valid date or 'today'.", param, ctx)
+
+# Instantiate the custom type to use with the click option
+DateType = ExtendedDate()
+
 @click.command()
 @click.option(
-    "--dir",
+    "--path", '-p', "dir",
     default="/data2/private/wangxin/raw2",
-    type=click.Path(exists=True),
-    help="parent directory to store data.",
+    type=click.Path(),
+    help="path directory to store the downloaded data, will be created if doesn't exist.",
 )
+
 @click.option(
     "--begin",
     default="2017-01-01",
-    type=str,
-    help="begin date, e.g. 20210101, 2021-01-01.",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
 )
 @click.option(
     "--end",
     default="today",
-    type=str,
-    help="end date, e.g. 20231001, 2023-10-01, or `today`.",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option(
     "--item",
     default="univ",
-    type=str,
+    type=click.Choice(["bar_1min", "univ", "return", "lag_return"]),
     help="item name to download, one of `bar_1m`, `univ`, `return`, `lag_return`.",
 )
-@click.option("--n_jobs", default=10, type=int, help="number of parallel jobs at most.")
+@click.option("--n_jobs", default=10, type=int, 
+              help="number of ray parallel jobs at most, only used for bar_1min.")
 def download(
     dir: str,
     begin: str,
@@ -43,7 +62,6 @@ def download(
     
     import ray
     import polars as pl
-    from pit import get_bars
     from pit.utils import any2date
     from pit.data import BopuDataReader
 
@@ -100,15 +118,6 @@ def download(
         for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
-            
-        # if item == "lag_return":
-        #     prev = df["date"].dt.strftime("%Y-%m-%d").unique()
-        #     assert len(prev) == 1
-        #     prev = prev.item()
-        #     df.to_parquet(f"{item_dir}/{prev}.parq")
-        # else:
-        #     df.to_parquet(f"{item_dir}/{date}.parq")
-        # return date
 
     if item == 'bar_1min':
         task_ids = []
@@ -156,38 +165,27 @@ def download(
 #     return trade_dates
 
 @click.command()
-@click.option('--prod', default='1030', help='product to train')
+@click.option('--prod', '-p', 
+              default=click.Choice(list_prods()),
+              help='product to infer')
 @click.option('--milestone', default='today', help='milestone date of the model to train.')
 def train_single(prod, milestone):
     """cli command to train single model of given prod and milestone.
     """
-    from pit import get_training_config, TrainPipeline, list_prods
-    # pit_dir = os.path.join(
-    #     os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    # conf = OmegaConf.load(open(f"{pit_dir}/config.yml"))
-    # config = OmegaConf.to_container(conf)
-    # os.environ['DATASET_DIR'] = config['DATASET_DIR']
-    # os.environ['CALENDAR_PATH'] = config['CALENDAR_PATH']
-    # os.environ['SAVE_DIR'] = config['SAVE_DIR']
-    
-    
-    valid_prods = list_prods()
-    if prod not in valid_prods:
-        raise ValueError(f"prod {prod} not in {valid_prods}")
     args = get_training_config(prod=prod, milestone=milestone)
     pipe = TrainPipeline(args)
     pipe.run()
  
 @click.command()
-@click.option('--prod', '-p', default='1030', type=str, help='product to train')
-@click.option('--mode', '-m', default='train', type=str, help='train or inference args to show.')
+@click.option('--prod', '-p', 
+              default=click.Choice(list_prods()),
+              help='product to infer')
+@click.option('--mode', '-m', default='train', 
+              type=click.Choice(['train', 'inference']), case_sensitive=True,
+              help='train or inference args to show.')
 def show(prod, mode):
     """cli command to list training or inference args.
     """
-    from pit import get_training_config, get_inference_config, list_prods
-    valid_prods = list_prods()
-    if prod not in valid_prods:
-        raise ValueError(f"prod {prod} not in {valid_prods}")
     if mode == 'train':
         args = get_training_config(prod=prod)
     elif mode == 'inference':
@@ -198,7 +196,9 @@ def show(prod, mode):
 
     
 @click.command()
-@click.option('--prod', '-p', default='1030', help='product to infer')
+@click.option('--prod', '-p', 
+              default=click.Choice(list_prods()),
+              help='product to infer')
 @click.option('--date', '-d', default='today', help='the date of data used for inference.')
 def inference(prod, date):
     """cli command to train single model of given prod and milestone.
@@ -206,7 +206,6 @@ def inference(prod, date):
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     import sys
-    from pit import get_inference_config, list_prods
     from pit.inference import infer, InferenceDataSource
     from pit.utils import any2ymd 
     import polars as pl
@@ -215,9 +214,6 @@ def inference(prod, date):
     import genutils as gu
     
     infer_date: str = any2ymd(date)
-    valid_prods = list_prods()
-    if prod not in valid_prods:
-        raise ValueError(f"prod {prod} not in {valid_prods}")
     args = get_inference_config(prod=prod)
     
     if len(gu.tcalendar.get(infer_date, infer_date)) == 0:

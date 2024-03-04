@@ -9,6 +9,8 @@ class BopuDataReader:
     def __init__(self):
         try:
             self.dr = importlib.import_module("datareader")
+            # for read bars in version 3.1 
+            self.dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
         except ImportError:
             raise ImportError("Error: module datareader not found")
         try:
