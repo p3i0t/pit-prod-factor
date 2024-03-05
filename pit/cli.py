@@ -819,7 +819,7 @@ def merge10_v2(n_jobs, n_cpu):
                     .select(["date", "symbol"] + v2_cols)
                     .collect()
                 )
-                df_10m = df_10m.with_columns(pl.col('date').cast(pl.Categorical))
+                df_10m = df_10m.with_columns(pl.col('symbol').cast(pl.Categorical))
                 df_ret = pl.scan_parquet(f"{dir_ret}/{_d}.parq").collect()
                 df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_d}.parq").collect()
                 df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
