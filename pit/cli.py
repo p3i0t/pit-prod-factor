@@ -602,7 +602,7 @@ def download_lag_return(
     cols = ["date", "prev", "next"]
     date_lag = gu.tcalendar.getdf(begin=begin, end=end, renew=False)[cols]
     date_lag = pl.from_dataframe(date_lag)
-    date_lag = date_lag.with_columns(pl.col('date').cast(pl.Date).alias('date'))
+    date_lag = date_lag.with_columns(pl.col(c).cast(pl.Date).alias('date') for c in cols)
     df_lag = df.join(date_lag, on="date", how="left")
     df_lag = df_lag.drop(["date", "next"])
     df_lag = df_lag.rename({"prev": "date"})
