@@ -444,7 +444,7 @@ def download_lag_return(
     begin: str,
     end: str
 ):
-    """Download universe."""
+    """Download lag return."""
     from pathlib import Path
     from datetime import datetime, timedelta
 
@@ -599,6 +599,7 @@ def download_lag_return(
     cols = ["date", "prev", "next"]
     date_lag = gu.tcalendar.getdf(begin=begin, end=end, renew=False)[cols]
     date_lag = pl.from_dataframe(date_lag)
+    date_lag = date_lag.with_columns(pl.col('date').cast(pl.Date).alias('date'))
     df_lag = df.join(date_lag, on="date", how="left")
     df_lag = df_lag.drop(["date", "next"])
     df_lag = df_lag.rename({"prev": "date"})
