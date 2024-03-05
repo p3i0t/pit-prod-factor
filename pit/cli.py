@@ -740,6 +740,112 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
             logger.info(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
 
+
+@click.command()
+@click.option(
+    "--n_jobs", default=20, type=int, help="number of parallel jobs are most."
+)
+# @click.option("--tgt_name", default='10m_v2', type=str, help="name of the target dataset.")
+# @click.option("--with_cancel_columns", default=False, type=bool, help='whether to print progress.')
+# @click.option("--verbose", default=False, type=bool, help='whether to print progress.')
+def merge10_v2(n_jobs):
+    from pathlib import Path
+
+    dir_10m = "/data2/private/wangxin/raw2/bar_10m"
+    dir_univ = "/data2/private/wangxin/raw2/univ"
+    dir_ret = "/data2/private/wangxin/raw2/return"
+    dir_lag_ret = "/data2/private/wangxin/raw2/lag_return"
+
+    tgt_dir = Path("/data2/private/wangxin/dataset/10m_v2_new")
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+    from collections import defaultdict
+    import os
+    import re
+    import polars as pl
+    import ray
+    import itertools
+    # from optimus.data.sources.bopu import BopuStockBars
+    # from optimus.utils import get_time_slots
+    from dlkit.utils import get_time_slots
+
+    bars = get_bars('v2')
+    slots = get_time_slots('0930', '1500', freq_in_min=10)
+    v2_factors = [
+        f"{_b}_{_agg}" for _b, _agg in itertools.product(bars, ["mean", "std"])
+    ]
+    v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
+
+    src_files = (
+        set(os.listdir(dir_10m)) & set(os.listdir(dir_univ)) & set(os.listdir(dir_ret))
+    )
+    src_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in sorted(src_files)[:-6]]
+
+    monthly_groups = defaultdict(list)
+    for _date in src_dates:
+        monthly_groups[re.findall(r"\d{4}-\d{2}", _date)[0]].append(_date)
+
+    @ray.remote(max_calls=3)
+    def _merge(month, dates):
+        with pl.StringCache():
+            s, t = min(dates), max(dates)
+            exists = [file for file in os.listdir(tgt_dir) if file.startswith(month)]
+
+            if len(exists) == 0:
+                # df_cur = pl.DataFrame()  # empty df
+                pass
+            elif len(exists) == 1:
+                cur_s, cur_t = re.findall(r"\d{4}-\d{2}-\d{2}", exists[0])
+                if all(cur_s <= _d <= cur_t for _d in dates):
+                    return  # already merged
+                else:
+                    os.remove(f"{tgt_dir}/{exists[0]}")
+                    logger.info(f"remove {tgt_dir}/{exists[0]}")
+                    # dates = [_d for _d in dates if _d > cur_t]  # only merge new dates
+                    # df_cur = pl.scan_parquet(f"{tgt_dir}/{exist[0]}").collect()
+            else:
+                for _file in exists:
+                    os.remove(f"{tgt_dir}/{_file}")
+                    logger.info(f"remove {tgt_dir}/{_file}")
+                # raise ValueError(f"multiple files found for {month}")
+
+            df_list = []
+            for _d in dates:
+                df_univ = pl.scan_parquet(f"{dir_univ}/{_d}.parq").collect()
+                df_10m = (
+                    pl.scan_parquet(f"{dir_10m}/{_d}.parq")
+                    .select(["date", "symbol"] + v2_cols)
+                    .collect()
+                )
+                df_ret = pl.scan_parquet(f"{dir_ret}/{_d}.parq").collect()
+                df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_d}.parq").collect()
+                df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
+                df = df.join(df_ret, on=["date", "symbol"], how="left")
+                df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
+                df_list.append(df)
+            df_final = pl.concat(df_list)
+            cols = df_final.select(pl.col(pl.Float64)).columns
+            df_final = df_final.with_columns(pl.col(c).cast(pl.Float32) for c in cols)
+            df_final.write_parquet(f"{tgt_dir}/{s}_{t}.parq")
+        return month
+
+    task_ids = []
+    n_task_finished = 0
+    for _month, _dates in monthly_groups.items():
+        # if verbose is True:
+        #     click.echo(f"running on {file}")
+        task_id = _merge.options(
+            name="x",
+            num_cpus=4,
+        ).remote(month=_month, dates=_dates)
+        task_ids.append(task_id)
+
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            logger.info(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+    
 # @click.command()
 # @click.option('--source', default='bopu', help='source of calendar data')
 # def update_calendar(source: Literal['akshare', 'bopu'] = 'bopu'):
