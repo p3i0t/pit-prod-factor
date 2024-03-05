@@ -888,6 +888,7 @@ pit.add_command(download_univ)
 pit.add_command(download_return)
 pit.add_command(download_lag_return)
 pit.add_command(long2widev2)
+pit.add_command(downsample10)
 
 if __name__ == "__main__":
     pit()
