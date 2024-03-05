@@ -104,7 +104,8 @@ class InferencePipeline:
             if isinstance(self.args.n_latest, int)
             else max(self.args.n_latest)
         )
-        models_required = self.models_available[i - n_retain : i]
+        l = 0 if i - n_retain < 0 else i - n_retain
+        models_required = self.models_available[l : i]
         logger.info(f"models required: {models_required}")
 
         pred_list = []
