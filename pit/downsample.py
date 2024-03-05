@@ -40,7 +40,7 @@ def downsample_1m_to_10m(
     if bars is None:
         bars = [_col for _col in df.columns if _col not in meta_cols]
 
-    expr_list, agg_columns = bars_ops_combinations(bars, ops=None)
+    expr_list, agg_columns = bars_ops_combinations(bars, ops=['mean', 'std'])
     expr_list.append(pl.col("time").count().alias("count"))  # for debug
 
     if isinstance(df, pl.DataFrame):

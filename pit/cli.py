@@ -804,7 +804,7 @@ def inference(prod, date):
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     import sys
-    from pit.inference import infer, InferenceDataSource
+    from pit.inference import infer, InferenceMode
     from pit.utils import any2ymd 
     import polars as pl
     from datetime import timedelta
@@ -818,7 +818,7 @@ def inference(prod, date):
         print(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
     
-    o = infer(args=args, infer_date=infer_date, mode=InferenceDataSource.online, debug=False)
+    o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=False)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
         next_date = gu.tcalendar.adjust(infer_date, 1)
