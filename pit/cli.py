@@ -628,8 +628,13 @@ def download_lag_return(
 @click.option(
     "--n_jobs", default=10, type=int, help="number of parallel jobs are most."
 )
+@click.option(
+    "--cpus_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
+)
 @click.option("--verbose", default=False, type=bool, help="whether to print progress.")
-def long2widev2(_dir: str, n_jobs: int, verbose: bool):
+def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
+    """Long to wide for v2 bars.
+    """
     import os
     import re
     from pathlib import Path
@@ -649,8 +654,7 @@ def long2widev2(_dir: str, n_jobs: int, verbose: bool):
         click.echo(f"{trading_dates=}")
     click.echo(f"Long to wide {len(trading_dates)} tasks to be done.")
 
-    cpu_per_task = 2
-    ray.init(num_cpus=n_jobs * cpu_per_task, ignore_reinit_error=True, include_dashboard=False)
+    ray.init(num_cpus=n_jobs * n_cpu, ignore_reinit_error=True, include_dashboard=False)
     @ray.remote(max_calls=1)
     def long2wide_fn(date: str):
         df = pl.scan_parquet(f"{src_dir}/{date}.parq")
@@ -675,7 +679,7 @@ def long2widev2(_dir: str, n_jobs: int, verbose: bool):
             click.echo(f"running on {_d}")
         task_id = long2wide_fn.options(
             name="x",
-            num_cpus=cpu_per_task,
+            num_cpus=n_cpu,
         ).remote(date=_d)
         task_ids.append(task_id)
 
@@ -687,6 +691,55 @@ def long2widev2(_dir: str, n_jobs: int, verbose: bool):
     ray.get(task_ids)
     
     click.echo("task long2wide_v2 done.")
+    
+
+@click.command()
+@click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
+@click.option('--cpu_per_task', 'n_cpu', default=4, type=int, help='number of cpus per task.')
+@click.option("--verbose", default=False, type=bool, help="whether to print progress.")
+def downsample10(n_jobs, n_cpu: int, verbose: bool):
+    src_dir = "/data2/private/wangxin/raw2/bar_1m"
+    tgt_dir = "/data2/private/wangxin/raw2/bar_10m"
+    from pathlib import Path
+    from pit.downsample import downsample_1m_to_10m
+
+    Path(tgt_dir).mkdir(parents=True, exist_ok=True)
+
+    import os
+    import polars as pl
+    import ray
+
+    @ray.remote(max_calls=3)
+    def _downsample(file):
+        bars = get_bars("v2")
+        downsample_1m_to_10m(
+            pl.scan_parquet(f"{src_dir}/{file}"), bars=bars
+        ).write_parquet(f"{tgt_dir}/{file}")
+        return file
+
+    src_files = set(os.listdir(src_dir))
+    tgt_files = set(os.listdir(tgt_dir))
+    left_files = sorted(src_files - tgt_files)
+    click.echo(f"{len(left_files)} downsample tasks to be done.")
+
+    task_ids = []
+    n_task_finished = 0
+    for exp_id, file in enumerate(left_files, 1):
+        if verbose is True:
+            click.echo(f"running on {file}")
+        task_id = _downsample.options(
+            name="x",
+            num_cpus=n_cpu,
+        ).remote(file=file)
+        task_ids.append(task_id)
+
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            logger.info(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+
 # @click.command()
 # @click.option('--source', default='bopu', help='source of calendar data')
 # def update_calendar(source: Literal['akshare', 'bopu'] = 'bopu'):
