@@ -908,7 +908,10 @@ def show(prod, mode):
               default=click.Choice(list_prods()),
               help='product to infer')
 @click.option('--date', '-d', default='today', help='the date of data used for inference.')
-def inference(prod, date):
+@click.option(
+    "--debug", default=False, type=bool, help="whether to print progress."
+)
+def inference(prod, date, debug):
     """cli command to train single model of given prod and milestone.
     
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -928,7 +931,7 @@ def inference(prod, date):
         print(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
     
-    o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=False)
+    o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
         next_date = gu.tcalendar.adjust(infer_date, 1)
@@ -969,7 +972,10 @@ def inference(prod, date):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-def infer_hist(prod, begin, end):
+@click.option(
+    "--debug", default=False, type=bool, help="whether to print progress."
+)
+def infer_hist(prod, begin, end, debug):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
@@ -982,7 +988,7 @@ def infer_hist(prod, begin, end):
     # infer_date: str = any2ymd(date)
     args = get_inference_config(prod=prod)
     
-    o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=False)
+    o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
         date_lag = gu.tcalendar.getdf(begin, end)
