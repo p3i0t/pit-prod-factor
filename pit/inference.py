@@ -15,15 +15,15 @@ from loguru import logger
 from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
-from dlkit.data import ParquetStockSource
 from dlkit.utils import get_time_slots, CHECHPOINT_META
-from pit.utils import any2datetime, process_offline_stock_df, Datetime
+from pit.utils import any2datetime
 from pit import get_bars
+from pit.datasource import (DataSource, OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
 
 logger = logger.bind(where="inference")
 
 
-__all__ = ["InferenceDataSource", "infer"]
+__all__ = ["InferenceMode", "infer"]
 
 class InferencePipeline:
     """The general inference pipeline for both offline and online inference.
@@ -151,162 +151,47 @@ class InferencePipeline:
         return x
 
 
-class InferenceDataSource(str, Enum):
+class InferenceMode(str, Enum):
     offline = 'offline'
     online = 'online'
+    online_submit = 'online_submit'
 
 
-def bars_ops_combinations(
-    bars: list[str], 
-    ops: Optional[list[str]] = None
-) -> tuple[list[pl.Expr], list[str]]:
-    if ops is None:
-        ops = ["mean", "std", "skew", "kurt"]
-    expr_list = []
-    columns = []
-    for col in bars:
-        for op in ops:
-            if op == "mean":
-                expr_list.append(pl.col(col).mean().alias(f"{col}_mean"))
-                columns.append(f"{col}_mean")
-            elif op == "std":
-                expr_list.append(pl.col(col).std().alias(f"{col}_std"))
-                columns.append(f"{col}_std")
-            elif op == "skew":
-                expr_list.append(pl.col(col).skew().alias(f"{col}_skew"))
-                columns.append(f"{col}_skew")
-            elif op == "kurt":
-                expr_list.append(pl.col(col).kurtosis().alias(f"{col}_kurt"))
-                columns.append(f"{col}_kurt")
-    return expr_list, columns
+def infer_on_df(
+    args: InferenceArguments,
+    datasource: DataSource,
+    debug: bool = False,
+) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
+    """The general inference pipeline on give datasource. Dependency Injection.
 
+    Args:
+        args (InferenceArguments): Inference arguments.
+        datasource (DataSource): Any data source that implements DataSource Protocol.
+        debug (bool, optional): Whether to print debug information. Defaults to False.
 
-def load_and_process_online_stock_df(
-    x_range: Tuple[str, str],
-    universe: str,
-    date_range: Optional[tuple[Datetime, Datetime]]=None,
-    debug=False,
-) -> pl.DataFrame:
-    import importlib
-    import itertools
-    # import pandas as pd
-    # from optimus.data.downsample import bars_ops_combinations
-
-    cols = get_bars(feature_set='v2')
-    try:
-        dr = importlib.import_module("datareader")
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
-
-    x_begin, x_end = x_range
-    if date_range:
-        infer_begin, infer_end = date_range
-    else:
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
-        infer_begin, infer_end = today, today
-    
-    online_logger = logger.bind(where="inference", function="online")
-    # add universe filter
-    slots_1min = get_time_slots(
-        start=x_begin, end=x_end, freq_in_min=1
-    )
-
-    df_univ: pl.DataFrame = dr.read(
-        dr.m.StockUniverse(universe),
-        begin=infer_begin,
-        end=infer_end,
-        df_lib='polars'
-    )
-
-    s = perf_counter()
-    df_1min: pl.DataFrame = dr.read(
-        dr.meta.StockMinute(columns=cols, version="2", abbr=True, production=True),
-        begin=infer_begin,
-        end=infer_end,
-        at=slots_1min,
-        df_lib='polars'
-    )
-    t = perf_counter() - s
-    online_logger.info(f"read 1min bars from datareader, time elapsed: {t:.2f}s")
-    if df_1min.shape[0] == 0:
-        online_logger.error("no 1min bars available.")
-        # return None
-
-    df_1min = df_univ.join(df_1min, on=["date", "symbol"], how="left")
+    Returns:
+        pl.DataFrame | Dict[int, pl.DataFrame] | None: _description_
+    """
     if debug is True:
-        print("df_1min:", df_1min[['date', 'symbol']].dtypes)
+        s = perf_counter()
+    df = datasource.collect()
 
-    # get full valid universe, i.e. symbols with complete 1min bars
-    symbols_complete: pl.Series = (
-        df_1min
-        .select(['symbol', 'time']).group_by('symbol')
-        .agg(pl.col('time').count().alias('count'))
-        .filter(pl.col('count') == len(slots_1min))
-        .get_column('symbol')
-        )
-    df_1min = df_1min.filter(pl.col('symbol').is_in(symbols_complete))
-    # bar_cnt = df_1min[["symbol", "time"]].groupby("symbol").agg("count")
-    # bar_cnt = bar_cnt[bar_cnt["time"] == len(slots_1min)].reset_index()
-    # df_1min = df_1min[df_1min["symbol"].isin(bar_cnt["symbol"])]
     if debug is True:
-        print("pl.df from pandas:", df_1min.select(["date", "symbol"]).head(5))
+        t = perf_counter() - s
+        logger.info(f"time to load data: {t:.2f}s")
+        s = perf_counter()
+    ip = InferencePipeline(args=args)
 
-    online_logger.info(f"valid 1min bars dataframe selected, shape: {df_1min.shape}")
-
-    s = perf_counter()
-    meta_cols = ["date", "symbol", "time"]
-    expr_list, agg_columns = bars_ops_combinations(cols, ops=["mean", "std"])
-    expr_list.append(pl.col("time").count().alias("count"))  # for debug
-
-    df = (
-        df_1min.lazy()
-        .sort(by=meta_cols)
-        .group_by_dynamic(
-            index_column="time",
-            every="10m",
-            period="9m",
-            offset="1m",
-            by=["symbol", "date"],
-            closed="both",
-            include_boundaries=True,
-        )
-        .agg(expr_list)
-    ).collect()
-
-    df: pl.DataFrame = df.with_columns(
-        [
-            pl.col("_upper_boundary").dt.strftime("%H%M").alias("slot"),
-            # pl.col('_upper_boundary').dt.strftime('%Y-%m-%d').alias('date')
-        ]
-    )
-    t = perf_counter() - s
-    online_logger.info(f"downsampling, time elapsed: {t:.2f}s")
-    data_complete = all(df.select(pl.col("count") == 10).to_series().to_list())
-    online_logger.info(f"all window has complete 10 minute bars: {data_complete}")
-
-    # long to wide
-    s = perf_counter()
-    slots = df.get_column("slot").unique().sort().to_list()
     if debug is True:
-        print("df after downsample:", df.select(["date", "symbol"]).head(5))
-    df = df.pivot(index=["symbol", "date"], columns="slot", values=agg_columns)
-    if debug is True:
-        print("df after pivot:", df.select(["date", "symbol"]).head(5))
-    name_mapping = {
-        f"{col}_slot_{slt}": f"{col}_{slt}"
-        for col, slt in itertools.product(agg_columns, slots)
-    }
-    df = df.rename(name_mapping)
-    t = perf_counter() - s
-    online_logger.info(
-        f"dataframe pivot, shape: {df.shape}, time elapsed: {t:.2f}s"
-    )
-    return df
+        t = perf_counter() - s
+        logger.info(f"InferencePipeline pass time: {t:.2f}s")
+    return ip(df)
+
 
 def infer(
     args: InferenceArguments,
     infer_date: str|Tuple[str, str] = 'today',
-    mode: InferenceDataSource = InferenceDataSource.online,
+    mode: InferenceMode = InferenceMode.online,
     log_path: Optional[str] = None,
     debug: bool = False,
 ) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
@@ -331,34 +216,49 @@ def infer(
     else:
         raise TypeError(f"date in InferenceArguments should be str or Tuple[str, str], but is {type(infer_date)}")
 
-    date_col = 'date'
-    if mode == InferenceDataSource.offline:
-        ds_fn = ParquetStockSource(
-            str(args.dataset_dir) + '/*',
-            process_offline_stock_df,
-            ["date", "symbol"] + args.x_slot_columns + args.y_columns,
+    if mode == InferenceMode.offline:
+        ds = OfflineDataSource(
+            data_path=str(args.dataset_dir) + '/*',
+            columns=["date", "symbol"] + args.x_slot_columns,
             universe=args.universe,
             date_range=(begin, end),
-            date_col=date_col,
+            date_col='date',
             fill_nan=True,
-            )
-        with pl.StringCache():
-            df = ds_fn()
-    elif mode == InferenceDataSource.online:
+        )
+    elif mode == InferenceMode.online:
         # online data source.
-        df = load_and_process_online_stock_df(
-            x_range=(args.x_begin, args.x_end),
+        ds = OnlineV2DownsampleDataSource(
+            slot_range=(args.x_begin, args.x_end),
             universe=args.universe,
             date_range=(begin, end),
+            fill_nan=True,
             debug=debug,
+        )
+    elif mode == InferenceMode.online_submit:
+        ds = Online10minDatareaderDataSource(
+            slot_range=(args.x_begin, args.x_end),
+            universe=args.universe,
+            date_range=(begin, end),
+            fill_nan=True,
         )
     else:
         raise ValueError(f"mode: {mode} not supported.")
-    if debug is True:
-        print("input:", df.select(['date', 'symbol']).head(5))
     
-    ip = InferencePipeline(args=args)
     if debug is True:
-        df.write_csv(f"df_{mode}_{infer_date}.csv")
+        s = perf_counter()
+    df: pl.DataFrame = ds.collect()
+    if debug is True:
+        df.write_parquet(f"df_{mode}.parq")
+
+    if debug is True:
+        t = perf_counter() - s
+        logger.info(f"time to load data: {t:.2f}s")
+        s = perf_counter()
+    ip = InferencePipeline(args=args)
+
+    if debug is True:
+        t = perf_counter() - s
+        logger.info(f"InferencePipeline pass time: {t:.2f}s")
     return ip(df)
+
     

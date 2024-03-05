@@ -7,10 +7,10 @@ import polars as pl
 import torch
 from dlkit.preprocessing import DataFrameNormalizer, StandardScaler, CrossSectionalScaler
 from dlkit.train import StockTrainer, TrainArguments
-from dlkit.data import StockDataset, ParquetStockSource
+from dlkit.data import StockDataset
 from dlkit.utils import CHECHPOINT_META
 
-from pit.utils import process_offline_stock_df
+from pit.datasource import OfflineDataSource
 
 train_logger = logger.bind(where="train_pipeline")
 
@@ -36,10 +36,9 @@ class TrainPipeline:
         else:
             end = self.args.eval_date_range[-1] 
         self.date_col = 'date'
-        self.data_source = ParquetStockSource(
-            str(self.args.dataset_dir) + '/*',
-            process_offline_stock_df,
-            ["date", "symbol"] + self.args.x_slot_columns + self.args.y_columns,
+        self.offline_ds = OfflineDataSource(
+            data_path=str(self.args.dataset_dir) + '/*',
+            columns=["date", "symbol"] + self.args.x_slot_columns + self.args.y_columns,
             universe=self.args.universe,
             date_range=(begin, end),
             date_col=self.date_col,
@@ -52,7 +51,7 @@ class TrainPipeline:
     def split_data(self) -> Tuple[pl.DataFrame, pl.DataFrame, Optional[pl.DataFrame]]:
         with pl.StringCache():
             s = perf_counter()
-            df = self.data_source()
+            df = self.offline_ds.collect()
             t = perf_counter() - s
             train_logger.info(f"time to fetch data: {t:.2f}s")
 
@@ -120,11 +119,6 @@ class TrainPipeline:
         train_logger.info("normalization done.")
         
         train_set = self.df_to_dataset(train_set)
-        # if self.debug:
-        #     train_logger.info(f"{train_set.date.shape=}, {type(train_set.date)}")
-        #     train_logger.info(f"{train_set.symbol.shape=}, {type(train_set.symbol)}")
-        #     train_logger.info(f"{train_set.x.shape=}, {type(train_set.x)}")
-        #     train_logger.info(f"{train_set.y.shape=}, {type(train_set.y)}")
         eval_set = self.df_to_dataset(eval_set)
         if test_set is not None:
             test_set = self.df_to_dataset(test_set)

@@ -953,6 +953,66 @@ def inference(prod, date):
     alpha.write_parquet(tgt_dir.joinpath(f"{infer_date}.parq"))
     
     
+@click.command()
+@click.option('--prod', '-p', 
+              default=click.Choice(list_prods()),
+              help='product to infer')
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+def infer_hist(prod, begin, end):
+    """Inference on historical data.
+    For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
+    """
+    from pit.inference import infer, InferenceMode
+    import polars as pl
+    from datetime import timedelta
+    from pathlib import Path
+    import genutils as gu
+    
+    # infer_date: str = any2ymd(date)
+    args = get_inference_config(prod=prod)
+    
+    o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=False)
+    assert isinstance(o, pl.DataFrame)
+    if prod in ['0930', '0930_1h']:
+        date_lag = gu.tcalendar.getdf(begin, end)
+        date_lag = pl.from_pandas(date_lag)
+        date_lag = date_lag.with_columns(pl.col(c).cast(pl.Date) for c in ['date', 'next', 'prev'])
+        o = o.join(date_lag, on="date", how="left")
+        o = o.drop(["date", "prev"])
+        o = o.rename({"next": "date"})
+        
+        # replace date with next_date
+        # o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias('date'))
+
+    slot = args.y_slots
+    assert isinstance(slot, str)
+    o = o.with_columns(
+        pl.col('date')
+        .cast(pl.Datetime(time_unit='ns'))
+        .add(timedelta(hours=int(slot[:2]), minutes=int(slot[2:])))
+        .alias('time')
+    )
+    
+    pit_dir = os.path.join(os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFER_DIR)
+    tgt_dir = infer_dir.joinpath(prod)
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+    
+    o.write_parquet(tgt_dir.joinpath(f"hist_pred_{begin}_{end}.parq"))
+    alpha = o.select(['date', 'time', 'symbol', args.tgt_column]).rename(mapping={args.tgt_column: 'alpha'})
+    alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{begin}_{end}.parq"))
+    
 
 @click.group()
 def pit():
@@ -1000,6 +1060,7 @@ pit.add_command(download_lag_return)
 pit.add_command(long2widev2)
 pit.add_command(downsample10)
 pit.add_command(merge10_v2)
+pit.add_command(infer_hist)
 
 if __name__ == "__main__":
     pit()
