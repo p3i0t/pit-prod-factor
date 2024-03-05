@@ -287,7 +287,10 @@ def download_return(
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+    # trading_dates = sorted(set(trading_dates) - set(existing_dates))
+    recent_dates = sorted(gu.tcalendar.get(
+        begin=gu.tcalendar.adjust('today', -6), end='today'))
+    trading_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
 
     if len(trading_dates) == 0:
         click.echo(f"{item} is up to date {datetime.now().date()}")
@@ -416,9 +419,6 @@ def download_return(
     
     click.echo(f"task {item} done.")
 
-
-
-
 @click.command()
 @click.option(
     "--path", '-p', "dir",
@@ -474,7 +474,10 @@ def download_lag_return(
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+    recent_dates = sorted(gu.tcalendar.get(
+        begin=gu.tcalendar.adjust('today', -6), end='today'))
+    trading_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
+    
 
     if len(trading_dates) == 0:
         click.echo(f"{item} is up to date {datetime.now().date()}")
@@ -615,6 +618,75 @@ def download_lag_return(
     
     click.echo(f"task {item} done.")
     
+@click.command()
+@click.option(
+    "--dir", '_dir',
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(exists=True),
+    help="parent directory of data, a subdirectory named `bar_1m_wide` will be created.",
+)
+@click.option(
+    "--n_jobs", default=10, type=int, help="number of parallel jobs are most."
+)
+@click.option("--verbose", default=False, type=bool, help="whether to print progress.")
+def long2widev2(_dir: str, n_jobs: int, verbose: bool):
+    import os
+    import re
+    from pathlib import Path
+    import polars as pl
+    import ray
+    import itertools
+
+    dir = Path(_dir)
+    src_dir = dir.joinpath("bar_1m")
+    tgt_dir = dir.joinpath("bar_1m_wide_v2")
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+
+    src_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in os.listdir(src_dir)]
+    tgt_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in os.listdir(tgt_dir)]
+    trading_dates = sorted(set(src_dates) - set(tgt_dates))
+    if verbose is True:
+        click.echo(f"{trading_dates=}")
+    click.echo(f"Long to wide {len(trading_dates)} tasks to be done.")
+
+    cpu_per_task = 2
+    ray.init(num_cpus=n_jobs * cpu_per_task, ignore_reinit_error=True, include_dashboard=False)
+    @ray.remote(max_calls=1)
+    def long2wide_fn(date: str):
+        df = pl.scan_parquet(f"{src_dir}/{date}.parq")
+        # cols = [c for c in df.columns if c not in ["date", "symbol", "time"]]
+        cols = get_bars('v2')
+        df = df.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
+        df = df.with_columns([pl.col(_c).cast(pl.Float32) for _c in cols]).collect()
+        slots = df.get_column("slot").unique().sort().to_list()
+        df = df.pivot(index=["symbol", "date"], columns="slot", values=cols)
+        name_mapping = {
+            f"{col}_slot_{slt}": f"{col}_{slt}"
+            for col, slt in itertools.product(cols, slots)
+        }
+        df = df.rename(name_mapping)
+        df.write_parquet(f"{tgt_dir}/{date}.parq")
+        return date
+
+    task_ids = []
+    n_task_finished = 0
+    for exp_id, _d in enumerate(trading_dates, 1):
+        if verbose is True:
+            click.echo(f"running on {_d}")
+        task_id = long2wide_fn.options(
+            name="x",
+            num_cpus=cpu_per_task,
+        ).remote(date=_d)
+        task_ids.append(task_id)
+
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            logger.info(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+    
+    click.echo("task long2wide_v2 done.")
 # @click.command()
 # @click.option('--source', default='bopu', help='source of calendar data')
 # def update_calendar(source: Literal['akshare', 'bopu'] = 'bopu'):
@@ -762,6 +834,7 @@ pit.add_command(download_1m)
 pit.add_command(download_univ)
 pit.add_command(download_return)
 pit.add_command(download_lag_return)
+pit.add_command(long2widev2)
 
 if __name__ == "__main__":
     pit()
