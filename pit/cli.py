@@ -745,10 +745,13 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
 @click.option(
     "--n_jobs", default=20, type=int, help="number of parallel jobs are most."
 )
+@click.option(
+    "--cpu_per_task", 'n_cpu', default=2, type=int, help="number of cpus per task."
+)
 # @click.option("--tgt_name", default='10m_v2', type=str, help="name of the target dataset.")
 # @click.option("--with_cancel_columns", default=False, type=bool, help='whether to print progress.')
 # @click.option("--verbose", default=False, type=bool, help='whether to print progress.')
-def merge10_v2(n_jobs):
+def merge10_v2(n_jobs, n_cpu):
     from pathlib import Path
 
     dir_10m = "/data2/private/wangxin/raw2/bar_10m"
@@ -816,6 +819,7 @@ def merge10_v2(n_jobs):
                     .select(["date", "symbol"] + v2_cols)
                     .collect()
                 )
+                df_10m = df_10m.with_columns(pl.col('date').cast(pl.Categorical))
                 df_ret = pl.scan_parquet(f"{dir_ret}/{_d}.parq").collect()
                 df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_d}.parq").collect()
                 df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
@@ -835,7 +839,7 @@ def merge10_v2(n_jobs):
         #     click.echo(f"running on {file}")
         task_id = _merge.options(
             name="x",
-            num_cpus=4,
+            num_cpus=n_cpu,
         ).remote(month=_month, dates=_dates)
         task_ids.append(task_id)
 
