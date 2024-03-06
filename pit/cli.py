@@ -120,13 +120,14 @@ def download_1m(
         res_list = []
         for d, _df in df.partition_by(["date"], as_dict=True).items():
         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+            click.echo(f"task {d:%Y-%m-%d} done.")
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
         return df
         
     task_ids = []
     n_task_finished = 0
-    for exp_id, d in enumerate(trading_dates, 1):
+    for exp_id, d in enumerate(existing_dates, 1):
         task_id = remote_download.options(
             name="x",
             num_cpus=1,
@@ -141,7 +142,7 @@ def download_1m(
                 click.echo(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
     if verbose is True:
-        click.echo(f"{len(trading_dates)} tasks done.")
+        click.echo(f"{len(left_dates)} tasks done.")
     # click.echo(f"task {item} done.")
 
 
