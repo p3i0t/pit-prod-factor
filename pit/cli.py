@@ -143,7 +143,6 @@ def download_1m(
     ray.get(task_ids)
     if verbose is True:
         click.echo(f"{len(left_dates)} tasks done.")
-    # click.echo(f"task {item} done.")
 
 
 @click.command()
