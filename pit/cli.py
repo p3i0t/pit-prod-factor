@@ -74,10 +74,10 @@ def download_1m(
         if verbose is True:
             click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
     
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "1530":
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
         _end = any2date(end)
         if verbose is True:
-            click.echo(f"end date {end} is trading day and data is available at now (till 1530), adjust to {_end}")
+            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
     else:
         _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
         if verbose is True:
@@ -115,15 +115,20 @@ def download_1m(
     ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
     
     @ray.remote(max_calls=2)
-    def remote_download(begin, end) -> pl.DataFrame:
+    def remote_download(begin, end) -> None:
         df = get_stock_minute(begin, end)
+        if df.is_empty():
+            if verbose is True:
+                click.echo(f"task {begin} is empty.")
+            return 
         res_list = []
         for d, _df in df.partition_by(["date"], as_dict=True).items():
         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-            click.echo(f"task {d:%Y-%m-%d} done.")
+            if verbose is True:
+                click.echo(f"task {d:%Y-%m-%d} done.")
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
-        return df
+        # return df
         
     task_ids = []
     n_task_finished = 0
