@@ -6,6 +6,7 @@ from loguru import logger
 
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
 from pit.utils import any2ymd
+from pit.download import get_stock_minute
 
 
 # self-defined click ParamType by overriding the convert() method 
@@ -28,7 +29,6 @@ DateType = ExtendedDate()
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
 )
-
 @click.option(
     "--begin",
     default="2017-01-01",
@@ -43,71 +43,81 @@ DateType = ExtendedDate()
 )
 @click.option("--n_jobs", default=10, type=int, 
               help="number of ray parallel jobs.")
+@click.option("--verbose", default=False, type=bool, 
+              help="whether to print details.")
 def download_1m(
     dir: str,
     begin: str,
     end: str,
     n_jobs: int,
+    verbose: bool
 ):
-    """Download 1min bars."""
+    """Download 1min bars up to today."""
+    import os
     from pathlib import Path
-    from datetime import datetime, timedelta
+    from datetime import datetime
     
     import ray
     import polars as pl
     from pit.utils import any2date
-
-    _dir = Path(dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Download 1min bars to directory={_dir}")
-    if datetime.now().strftime("%H%M") < "1530":
-        hard_end = datetime.now() - timedelta(hours=24)
-    else:
-        hard_end = datetime.now()
-    _end = min(any2date(end), any2date(hard_end))
-
     try:
         import genutils as gu
     except ImportError:
         raise ImportError("Please install genutils first.")
-    import os
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+        
+    if gu.tcalendar.trading(begin):
+        _begin = any2date(begin)
+    else:
+        _begin = gu.tcalendar.adjust(begin, 1)
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+    
+    if gu.tcalendar.trading(end) and datetime.now().strftime("%H%M") > "1530":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(f"end date {end} is trading day and data is available at now (till 1530), adjust to {_end}")
+    else:
+        _end = gu.tcalendar.adjust(end, -1)
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+        
+    if _begin <= _end:
+        pass
+        # click.echo(f"Download 1min bars to directory={_dir}, from {_begin} to {_end}")
+    else:
+        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+        return
 
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+    
+    if verbose is True:
+        click.echo(f"Targeted {len(trading_dates)} tasks from {trading_dates[0]} to {trading_dates[-1]}.")
 
     item = 'bar_1m'
     item_dir = _dir.joinpath(item)
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    # if item == "return" or item == "lag_return":
-    #     existing_dates = sorted(existing_dates)[:-6]
-    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+    left_dates = sorted(set(trading_dates) - set(existing_dates))
 
-    if len(trading_dates) == 0:
+    if len(left_dates) == 0:
         click.echo(f"{item} is up to date {datetime.now().date()}")
         return
-    click.echo(
-        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
-    )
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} tasks in total")
+        click.echo(f"{len(existing_dates)} tasks already exist.")
+        click.echo(f"{len(left_dates)} tasks to be done.")
 
     ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
+    
     @ray.remote(max_calls=2)
     def remote_download(begin, end) -> pl.DataFrame:
-        try:
-            import datareader as dr
-            dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
-        except ImportError:
-            raise ImportError("Error: module datareader not found")
-        
-        df: pl.DataFrame = dr.read(
-            dr.meta.StockMinute(
-                # columns=None, 
-                version="3.1", abbr=True),
-            begin=begin,
-            end=end,
-            df_lib='polars'
-        )
+        df = get_stock_minute(begin, end)
         res_list = []
         for d, _df in df.partition_by(["date"], as_dict=True).items():
         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
@@ -128,9 +138,12 @@ def download_1m(
             dones, task_ids = ray.wait(task_ids, num_returns=1)
             ray.get(dones)
             n_task_finished += 1
-            logger.info(f"{n_task_finished} tasks finished.")
+            if verbose is True and n_task_finished % 10 == 0:
+                click.echo(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
-    click.echo(f"task {item} done.")
+    if verbose is True:
+        click.echo(f"{len(trading_dates)} tasks done.")
+    # click.echo(f"task {item} done.")
 
 
 @click.command()
@@ -140,7 +153,6 @@ def download_1m(
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
 )
-
 @click.option(
     "--begin",
     default="2017-01-01",
@@ -230,8 +242,6 @@ def download_univ(
     click.echo(f"task {item} done.")
 
 
-
-
 @click.command()
 @click.option(
     "--path", '-p', "dir",
@@ -239,7 +249,6 @@ def download_univ(
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
 )
-
 @click.option(
     "--begin",
     default="2017-01-01",

@@ -15,9 +15,8 @@ from loguru import logger
 from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
-from dlkit.utils import get_time_slots, CHECHPOINT_META
+from dlkit.utils import CHECHPOINT_META
 from pit.utils import any2datetime
-from pit import get_bars
 from pit.datasource import (DataSource, OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
 
 logger = logger.bind(where="inference")
@@ -156,38 +155,6 @@ class InferenceMode(str, Enum):
     offline = 'offline'
     online = 'online'
     online_submit = 'online_submit'
-
-
-def infer_on_df(
-    args: InferenceArguments,
-    datasource: DataSource,
-    debug: bool = False,
-) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
-    """The general inference pipeline on give datasource. Dependency Injection.
-
-    Args:
-        args (InferenceArguments): Inference arguments.
-        datasource (DataSource): Any data source that implements DataSource Protocol.
-        debug (bool, optional): Whether to print debug information. Defaults to False.
-
-    Returns:
-        pl.DataFrame | Dict[int, pl.DataFrame] | None: _description_
-    """
-    if debug is True:
-        s = perf_counter()
-    df = datasource.collect()
-
-    if debug is True:
-        t = perf_counter() - s
-        logger.info(f"time to load data: {t:.2f}s")
-        s = perf_counter()
-    ip = InferencePipeline(args=args)
-
-    if debug is True:
-        t = perf_counter() - s
-        logger.info(f"InferencePipeline pass time: {t:.2f}s")
-    return ip(df)
-
 
 def infer(
     args: InferenceArguments,
