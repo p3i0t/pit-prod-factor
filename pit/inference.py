@@ -17,7 +17,7 @@ from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.utils import CHECHPOINT_META
 from pit.utils import any2datetime
-from pit.datasource import (DataSource, OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
+from pit.datasource import (OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
 
 logger = logger.bind(where="inference")
 
@@ -90,8 +90,6 @@ class InferencePipeline:
             raise ValueError("date must be provided.")
         df_cs = self._preprocess(df_cs)  # this is shared by all models
         df_index = df_cs.select(["date", "symbol"])
-
-        # if isinstance(infer_date, datetime.datetime):
         _infer_date: str = infer_date.strftime("%Y-%m-%d")
 
         i = bisect.bisect_right(self.models_available, _infer_date)
@@ -103,9 +101,9 @@ class InferencePipeline:
             if isinstance(self.args.n_latest, int)
             else max(self.args.n_latest)
         )
-        l = 0 if i - n_retain < 0 else i - n_retain
-        models_required = self.models_available[l : i]
-        logger.info(f"models required: {models_required}")
+        ll = 0 if i - n_retain < 0 else i - n_retain
+        models_required = self.models_available[ll : i]
+        logger.info(f"infer on {infer_date:%Y-%m-%d}, models required: {models_required}")
 
         pred_list = []
         for model_date in models_required:

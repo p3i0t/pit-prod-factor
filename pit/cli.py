@@ -23,7 +23,7 @@ DateType = ExtendedDate()
 
 @click.command()
 @click.option(
-    "--path", '-p', "dir",
+    "--path", "dir",
     default="/data2/private/wangxin/raw2",
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
@@ -42,7 +42,7 @@ DateType = ExtendedDate()
 )
 @click.option("--n_jobs", default=10, type=int, 
               help="number of ray parallel jobs.")
-@click.option("--verbose", default=False, type=bool, 
+@click.option("--verbose", '-v', default=False, type=bool, 
               help="whether to print details.")
 def download_1m(
     dir: str,
@@ -151,7 +151,7 @@ def download_1m(
 
 @click.command()
 @click.option(
-    "--path", '-p', "dir",
+    "--path", "dir",
     default="/data2/private/wangxin/raw2",
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
@@ -168,7 +168,7 @@ def download_1m(
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option("--verbose", default=False, type=bool, help="whether to print details.")
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
 def download_univ(
     dir: str,
     begin: str,
@@ -264,7 +264,7 @@ def download_univ(
 
 @click.command()
 @click.option(
-    "--path", '-p', "dir",
+    "--path", "dir",
     default="/data2/private/wangxin/raw2",
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
@@ -450,7 +450,7 @@ def download_return(
 
 @click.command()
 @click.option(
-    "--path", '-p', "dir",
+    "--path", "dir",
     default="/data2/private/wangxin/raw2",
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
@@ -659,7 +659,7 @@ def download_lag_return(
 @click.option(
     "--cpus_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
 )
-@click.option("--verbose", default=False, type=bool, help="whether to print progress.")
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
 def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
     """Long to wide for v2 bars.
     """
@@ -728,7 +728,7 @@ def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
 @click.command()
 @click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
 @click.option('--cpu_per_task', 'n_cpu', default=4, type=int, help='number of cpus per task.')
-@click.option("--verbose", default=False, type=bool, help="whether to print progress.")
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu: int, verbose: bool):
     """Downsample 1m to 10m.
     """
@@ -786,8 +786,6 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
 @click.option(
     "--cpu_per_task", 'n_cpu', default=2, type=int, help="number of cpus per task."
 )
-# @click.option("--tgt_name", default='10m_v2', type=str, help="name of the target dataset.")
-# @click.option("--with_cancel_columns", default=False, type=bool, help='whether to print progress.')
 # @click.option("--verbose", default=False, type=bool, help='whether to print progress.')
 def merge10_v2(n_jobs, n_cpu):
     from pathlib import Path
@@ -913,9 +911,9 @@ def merge10_v2(n_jobs, n_cpu):
 @click.option('--prod', '-p', 
               default=click.Choice(list_prods()),
               help='product to infer')
-@click.option('--milestone', default='today', help='milestone date of the model to train.')
+@click.option('--milestone', '-m', type=DateType, default='today', help='milestone date of the model to train.')
 def train_single(prod, milestone):
-    """cli command to train single model of given prod and milestone.
+    """Train single model of given prod and milestone.
     """
     args = get_training_config(prod=prod, milestone=milestone)
     pipe = TrainPipeline(args)
@@ -930,7 +928,7 @@ def train_single(prod, milestone):
               type=click.Choice(['train', 'inference']),
               help='train or inference args to show.')
 def show(prod, mode):
-    """cli command to list training or inference args.
+    """List training or inference args.
     """
     if mode == 'train':
         args = get_training_config(prod=prod)
@@ -1011,7 +1009,7 @@ def infer_online(prod, date, debug):
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option(
-    "--debug", default=False, type=bool, help="whether to print progress."
+    "--debug", default=False, type=bool, help="print more information when debug is True."
 )
 def infer_hist(prod, begin, end, debug):
     """Inference on historical data.
