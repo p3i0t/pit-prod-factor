@@ -1,10 +1,24 @@
+import datetime
 import os
+from pathlib import Path
+    
 import click
-from omegaconf import OmegaConf
 from loguru import logger
+from omegaconf import OmegaConf
+import polars as pl
 
+try:
+    import datareader as dr
+except ImportError:
+    raise ImportError("Error: module datareader not found.")
+    
+try:
+    import genutils as gu
+except ImportError:
+    raise ImportError("Error: module genutils not found.")
+    
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
-from pit.utils import any2ymd
+from pit.utils import any2ymd, any2date
 from pit.download import get_stock_minute
 
 
@@ -51,17 +65,8 @@ def download_1m(
     n_jobs: int,
     verbose: bool
 ):
-    """Download 1min bars up to today."""
-    import os
-    from pathlib import Path
-    import datetime
-    
+    """Download 1min bars up to today."""    
     import ray
-    from pit.utils import any2date
-    try:
-        import genutils as gu
-    except ImportError:
-        raise ImportError("Please install genutils first.")
 
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
@@ -176,16 +181,6 @@ def download_univ(
     verbose: bool
 ):
     """Download universe."""
-    from pathlib import Path
-    import datetime
-
-    import polars as pl
-    from pit.utils import any2date
-    try:
-        import genutils as gu
-    except ImportError:
-        raise ImportError("Please install genutils first.")
-
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
     
@@ -229,11 +224,6 @@ def download_univ(
         click.echo(f"{len(trading_dates)} tasks in total")
         click.echo(f"{len(existing_dates)} tasks already exist.")
         click.echo(f"{len(left_dates)} tasks to be done.")
-
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
     
     univs = [
         "univ_research",
@@ -250,7 +240,7 @@ def download_univ(
         "mktcap",
     ]
     df: pl.DataFrame = dr.read(
-        dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars'
+        dr.meta.StockUniverse(univs), begin=left_dates[0], end=left_dates[-1], df_lib='polars'
     )
     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
     if df.is_empty():
@@ -281,32 +271,39 @@ def download_univ(
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
 def download_return(
     dir: str,
     begin: str,
-    end: str
+    end: str,
+    verbose: bool
 ):
     """Download return."""
-    from pathlib import Path
-    from datetime import datetime, timedelta
-
-    import polars as pl
-    from pit.utils import any2date
-
+    # from datetime import datetime, timedelta
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Download 1min bars to directory={_dir}")
-    if datetime.now().strftime("%H%M") < "1530":
-        hard_end = datetime.now() - timedelta(hours=24)
+    
+    if gu.tcalendar.trading(begin):
+        _begin = any2date(begin)
     else:
-        hard_end = datetime.now()
-    _end = min(any2date(end), any2date(hard_end))
-
-    try:
-        import genutils as gu
-    except ImportError:
-        raise ImportError("Please install genutils first.")
-    import os
+        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+    
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+    else:
+        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+        
+    if _begin <= _end:
+        pass
+    else:
+        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+        return    
 
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
@@ -319,20 +316,16 @@ def download_return(
     # trading_dates = sorted(set(trading_dates) - set(existing_dates))
     recent_dates = sorted(gu.tcalendar.get(
         begin=gu.tcalendar.adjust('today', -6), end='today'))
-    trading_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
-
-    if len(trading_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.now().date()}")
-        return
-    click.echo(
-        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
-    )
-
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
+    left_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
     
+    if len(left_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
+        return
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} dates in total")
+        click.echo(f"{len(existing_dates)} dates already exist.")
+        click.echo(f"{len(left_dates)} dates to be done.")
 
     n_list = [1, 2, 3, 5]
 
@@ -444,8 +437,6 @@ def download_return(
     for d, _df in df.partition_by(["date"], as_dict=True).items():
     # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    # return df
-    
     click.echo(f"task {item} done.")
 
 @click.command()
@@ -467,58 +458,61 @@ def download_return(
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
 def download_lag_return(
     dir: str,
     begin: str,
-    end: str
+    end: str,
+    verbose: bool
 ):
     """Download lag return."""
-    from pathlib import Path
-    from datetime import datetime, timedelta
-
-    import polars as pl
-    from pit.utils import any2date
-
+    # from datetime import datetime, timedelta
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Download 1min bars to directory={_dir}")
-    if datetime.now().strftime("%H%M") < "1530":
-        hard_end = datetime.now() - timedelta(hours=24)
-    else:
-        hard_end = datetime.now()
-    _end = min(any2date(end), any2date(hard_end))
 
-    try:
-        import genutils as gu
-    except ImportError:
-        raise ImportError("Please install genutils first.")
-    import os
+    if gu.tcalendar.trading(begin):
+        _begin = any2date(begin)
+    else:
+        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+    
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+    else:
+        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+        
+    if _begin <= _end:
+        pass
+    else:
+        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+        return    
 
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
 
-    item = 'lag_return'
+    item = 'return'
     item_dir = _dir.joinpath(item)
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    # trading_dates = sorted(set(trading_dates) - set(existing_dates))
     recent_dates = sorted(gu.tcalendar.get(
         begin=gu.tcalendar.adjust('today', -6), end='today'))
-    trading_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
+    left_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
     
-
-    if len(trading_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.now().date()}")
+    if len(left_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
         return
-    click.echo(
-        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
-    )
-
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
-    
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} dates in total")
+        click.echo(f"{len(existing_dates)} dates already exist.")
+        click.echo(f"{len(left_dates)} dates to be done.")
 
     n_list = [1, 2, 3, 5]
 
@@ -642,10 +636,9 @@ def download_lag_return(
     for d, _df in df_lag.partition_by(["date"], as_dict=True).items():
     # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    # return df
-    
     click.echo(f"task {item} done.")
-    
+
+
 @click.command()
 @click.option(
     "--dir", '_dir',
@@ -663,10 +656,7 @@ def download_lag_return(
 def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
     """Long to wide for v2 bars.
     """
-    import os
     import re
-    from pathlib import Path
-    import polars as pl
     import ray
     import itertools
 
@@ -734,15 +724,11 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
     """
     src_dir = "/data2/private/wangxin/raw2/bar_1m"
     tgt_dir = "/data2/private/wangxin/raw2/bar_10m"
-    from pathlib import Path
     from pit.downsample import downsample_1m_to_10m
 
     if verbose is True:
         click.echo(f"downsample from {src_dir} to {tgt_dir}")
     Path(tgt_dir).mkdir(parents=True, exist_ok=True)
-
-    import os
-    import polars as pl
     import ray
 
     @ray.remote(max_calls=3)
@@ -788,8 +774,6 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
 )
 # @click.option("--verbose", default=False, type=bool, help='whether to print progress.')
 def merge10_v2(n_jobs, n_cpu):
-    from pathlib import Path
-
     dir_10m = "/data2/private/wangxin/raw2/bar_10m"
     dir_univ = "/data2/private/wangxin/raw2/univ"
     dir_ret = "/data2/private/wangxin/raw2/return"
@@ -798,9 +782,7 @@ def merge10_v2(n_jobs, n_cpu):
     tgt_dir = Path("/data2/private/wangxin/dataset/10m_v2_new")
     tgt_dir.mkdir(parents=True, exist_ok=True)
     from collections import defaultdict
-    import os
     import re
-    import polars as pl
     import ray
     import itertools
     # from optimus.data.sources.bopu import BopuStockBars
@@ -948,17 +930,13 @@ def show(prod, mode):
     "--debug", default=False, type=bool, help="whether to print progress."
 )
 def infer_online(prod, date, debug):
-    """Inference on single.
+    """Online inference on single date.
     
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     import sys
     from pit.inference import infer, InferenceMode
-    from pit.utils import any2ymd 
-    import polars as pl
     from datetime import timedelta
-    from pathlib import Path
-    import genutils as gu
     
     infer_date: str = any2ymd(date)
     args = get_inference_config(prod=prod)
@@ -1016,14 +994,9 @@ def infer_hist(prod, begin, end, debug):
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     from pit.inference import infer, InferenceMode
-    import polars as pl
     from datetime import timedelta
-    from pathlib import Path
-    import genutils as gu
     
-    # infer_date: str = any2ymd(date)
     args = get_inference_config(prod=prod)
-    
     o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
