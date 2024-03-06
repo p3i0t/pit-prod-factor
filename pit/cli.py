@@ -57,7 +57,6 @@ def download_1m(
     import datetime
     
     import ray
-    import polars as pl
     from pit.utils import any2date
     try:
         import genutils as gu
@@ -169,56 +168,73 @@ def download_1m(
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option("--verbose", default=False, type=bool, help="whether to print details.")
 def download_univ(
     dir: str,
     begin: str,
-    end: str
+    end: str,
+    verbose: bool
 ):
     """Download universe."""
     from pathlib import Path
-    from datetime import datetime, timedelta
+    import datetime
 
     import polars as pl
     from pit.utils import any2date
-
-    _dir = Path(dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Download 1min bars to directory={_dir}")
-    if datetime.now().strftime("%H%M") < "1530":
-        hard_end = datetime.now() - timedelta(hours=24)
-    else:
-        hard_end = datetime.now()
-    _end = min(any2date(end), any2date(hard_end))
-
     try:
         import genutils as gu
     except ImportError:
         raise ImportError("Please install genutils first.")
-    import os
+
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    
+    if gu.tcalendar.trading(begin):
+        _begin = any2date(begin)
+    else:
+        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+    
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+    else:
+        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+        
+    if _begin <= _end:
+        pass
+    else:
+        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+        return
 
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
-
+    
     item = 'univ'
     item_dir = _dir.joinpath(item)
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    trading_dates = sorted(set(trading_dates) - set(existing_dates))
+    left_dates = sorted(set(trading_dates) - set(existing_dates))
 
-    if len(trading_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.now().date()}")
+    if len(left_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
         return
-    click.echo(
-        f"Download {item} to directory={item_dir}, {len(trading_dates)} tasks to be done."
-    )
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} tasks in total")
+        click.echo(f"{len(existing_dates)} tasks already exist.")
+        click.echo(f"{len(left_dates)} tasks to be done.")
 
     try:
         import datareader as dr
     except ImportError:
         raise ImportError("Error: module datareader not found")
     
-
     univs = [
         "univ_research",
         "univ_largemid",
@@ -233,17 +249,17 @@ def download_univ(
         "univ_full",
         "mktcap",
     ]
-
-
     df: pl.DataFrame = dr.read(
         dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars'
     )
     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
+    if df.is_empty():
+        click.echo("univ dataframe is empty.")
+        return
     for d, _df in df.partition_by(["date"], as_dict=True).items():
     # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-        
-    click.echo(f"task {item} done.")
+    click.echo("task univ done.")
 
 
 @click.command()
@@ -439,7 +455,6 @@ def download_return(
     type=click.Path(),
     help="path directory to store the downloaded data, will be created if doesn't exist.",
 )
-
 @click.option(
     "--begin",
     default="2017-01-01",
@@ -658,6 +673,8 @@ def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
     dir = Path(_dir)
     src_dir = dir.joinpath("bar_1m")
     tgt_dir = dir.joinpath("bar_1m_wide_v2")
+    if verbose is True:
+        click.echo(f"long2wide from {src_dir} to {tgt_dir}")
     tgt_dir.mkdir(parents=True, exist_ok=True)
 
     src_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in os.listdir(src_dir)]
@@ -670,6 +687,8 @@ def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
     ray.init(num_cpus=n_jobs * n_cpu, ignore_reinit_error=True, include_dashboard=False)
     @ray.remote(max_calls=1)
     def long2wide_fn(date: str):
+        if verbose is True:
+            click.echo(f"running on {date}")
         df = pl.scan_parquet(f"{src_dir}/{date}.parq")
         # cols = [c for c in df.columns if c not in ["date", "symbol", "time"]]
         cols = get_bars('v2')
