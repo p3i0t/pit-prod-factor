@@ -286,7 +286,7 @@ def download_return(
     begin: str,
     end: str
 ):
-    """Download universe."""
+    """Download return."""
     from pathlib import Path
     from datetime import datetime, timedelta
 
@@ -730,11 +730,15 @@ def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
 @click.option('--cpu_per_task', 'n_cpu', default=4, type=int, help='number of cpus per task.')
 @click.option("--verbose", default=False, type=bool, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu: int, verbose: bool):
+    """Downsample 1m to 10m.
+    """
     src_dir = "/data2/private/wangxin/raw2/bar_1m"
     tgt_dir = "/data2/private/wangxin/raw2/bar_10m"
     from pathlib import Path
     from pit.downsample import downsample_1m_to_10m
 
+    if verbose is True:
+        click.echo(f"downsample from {src_dir} to {tgt_dir}")
     Path(tgt_dir).mkdir(parents=True, exist_ok=True)
 
     import os
@@ -769,8 +773,10 @@ def downsample10(n_jobs, n_cpu: int, verbose: bool):
             dones, task_ids = ray.wait(task_ids, num_returns=1)
             ray.get(dones)
             n_task_finished += 1
-            logger.info(f"{n_task_finished} tasks finished.")
+            if verbose is True and n_task_finished % 10 == 0:
+                click.echo(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
+    click.echo("task downsample done.")
 
 
 @click.command()
@@ -943,8 +949,8 @@ def show(prod, mode):
 @click.option(
     "--debug", default=False, type=bool, help="whether to print progress."
 )
-def inference(prod, date, debug):
-    """cli command to train single model of given prod and milestone.
+def infer_online(prod, date, debug):
+    """Inference on single.
     
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
@@ -1029,9 +1035,6 @@ def infer_hist(prod, begin, end, debug):
         o = o.join(date_lag, on="date", how="left")
         o = o.drop(["date", "prev"])
         o = o.rename({"next": "date"})
-        
-        # replace date with next_date
-        # o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias('date'))
 
     slot = args.y_slots
     assert isinstance(slot, str)
@@ -1054,7 +1057,7 @@ def infer_hist(prod, begin, end, debug):
 
 @click.group()
 def pit():
-    # """Manage my hahaha package."""
+    """pit: Alpha Signals Generator of Pit."""
     click.echo("Alpha Signals Generator of Pit.")
     # pit_dir is the directory to store the trading calendar, config file, results of this package.
     pit_dir = os.path.join(
@@ -1063,21 +1066,17 @@ def pit():
     if not os.path.exists(pit_dir):
         os.makedirs(pit_dir)
         click.echo(f"Created directory: {pit_dir}")
-
     else:
         pass
-        # click.echo(f"Directory already exists: {pit_dir}")
     
     if not os.path.exists(f"{pit_dir}/config.yml"):
         click.echo(f"Config file missing! generating default config file at {pit_dir}/config.yml")
-        
         default_config = {
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
             "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
             "SAVE_DIR": f"{pit_dir}/runs",
             "INFER_DIR": f"{pit_dir}/inference",
         }
-        
         cfg = OmegaConf.create(default_config)
         OmegaConf.save(cfg, f"{pit_dir}/config.yml")
         
@@ -1089,7 +1088,6 @@ def pit():
     #     pickle.dump(trade_dates, open(f"{pit_dir}/calendar.pkl", 'wb'))
 
 pit.add_command(train_single)
-pit.add_command(inference)
 pit.add_command(show)
 pit.add_command(download_1m)
 pit.add_command(download_univ)
@@ -1099,6 +1097,7 @@ pit.add_command(long2widev2)
 pit.add_command(downsample10)
 pit.add_command(merge10_v2)
 pit.add_command(infer_hist)
+pit.add_command(infer_online)
 
 if __name__ == "__main__":
     pit()
