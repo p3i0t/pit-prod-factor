@@ -1,7 +1,6 @@
 import os
 import click
 from omegaconf import OmegaConf
-from typing import Literal, Callable
 from loguru import logger
 
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
@@ -55,7 +54,7 @@ def download_1m(
     """Download 1min bars up to today."""
     import os
     from pathlib import Path
-    from datetime import datetime
+    import datetime
     
     import ray
     import polars as pl
@@ -71,16 +70,16 @@ def download_1m(
     if gu.tcalendar.trading(begin):
         _begin = any2date(begin)
     else:
-        _begin = gu.tcalendar.adjust(begin, 1)
+        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
         if verbose is True:
             click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
     
-    if gu.tcalendar.trading(end) and datetime.now().strftime("%H%M") > "1530":
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "1530":
         _end = any2date(end)
         if verbose is True:
             click.echo(f"end date {end} is trading day and data is available at now (till 1530), adjust to {_end}")
     else:
-        _end = gu.tcalendar.adjust(end, -1)
+        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
         if verbose is True:
             click.echo(f"end date {end} is not trading day, adjust to {_end}")
         
@@ -105,7 +104,7 @@ def download_1m(
     left_dates = sorted(set(trading_dates) - set(existing_dates))
 
     if len(left_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.now().date()}")
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
         return
     if verbose is True:
         click.echo(f"Download {item} to directory={item_dir}")
