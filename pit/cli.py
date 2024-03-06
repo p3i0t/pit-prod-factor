@@ -127,7 +127,7 @@ def download_1m(
         
     task_ids = []
     n_task_finished = 0
-    for exp_id, d in enumerate(existing_dates, 1):
+    for exp_id, d in enumerate(left_dates, 1):
         task_id = remote_download.options(
             name="x",
             num_cpus=1,
