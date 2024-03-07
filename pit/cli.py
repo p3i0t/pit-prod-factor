@@ -1022,9 +1022,12 @@ def infer_hist(prod, begin, end, debug):
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
     
-    o.write_parquet(tgt_dir.joinpath(f"hist_pred_{begin}_{end}.parq"))
+    use_begin = gu.tcalendar.adjust(begin, 1).date() if prod in ['0930', '0930_1h'] else begin
+    use_end = gu.tcalendar.adjust(end, 1).date() if prod in ['0930', '0930_1h'] else end
+    
+    o.write_parquet(tgt_dir.joinpath(f"hist_pred_{use_begin}_{use_end}.parq"))
     alpha = o.select(['date', 'time', 'symbol', args.tgt_column]).rename(mapping={args.tgt_column: 'alpha'})
-    alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{begin}_{end}.parq"))
+    alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{use_begin}_{use_end}.parq"))
     
 
 @click.group()
