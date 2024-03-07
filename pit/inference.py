@@ -178,7 +178,7 @@ def infer(
         begin, end = infer_date
         begin = any2datetime(begin)
         end = any2datetime(end)
-        infer_logger.info(f"{mode} inference on date range: {begin} to {end}")
+        infer_logger.info(f"{mode} inference on date range: {begin:%Y-%m-%d} to {end:%Y-%m-%d}")
     else:
         raise TypeError(f"date in InferenceArguments should be str or Tuple[str, str], but is {type(infer_date)}")
 

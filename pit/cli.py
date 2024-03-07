@@ -967,7 +967,8 @@ def infer_online(prod, date, debug):
     tgt_dir.mkdir(parents=True, exist_ok=True)
     
     alpha = o.select(['date', 'time', 'symbol', args.tgt_column]).rename(mapping={args.tgt_column: 'pit'})
-    alpha.write_parquet(tgt_dir.joinpath(f"{infer_date}.parq"))
+    use_date = next_date if prod in ['0930', '0930_1h'] else infer_date
+    alpha.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
     
     
 @click.command()
