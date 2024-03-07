@@ -779,7 +779,7 @@ def merge10_v2(n_jobs, n_cpu):
     dir_ret = "/data2/private/wangxin/raw2/return"
     dir_lag_ret = "/data2/private/wangxin/raw2/lag_return"
 
-    tgt_dir = Path("/data2/private/wangxin/dataset/10m_v2_new")
+    tgt_dir = Path("/data2/private/wangxin/dataset/10m_v2")
     tgt_dir.mkdir(parents=True, exist_ok=True)
     from collections import defaultdict
     import re
