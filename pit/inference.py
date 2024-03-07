@@ -30,6 +30,7 @@ class InferencePipeline:
     def __init__(self, args: InferenceArguments):
         self.args = args
         self.models_available = sorted(os.listdir(f"{args.save_dir}/{args.prod}"))
+        self.model_cache = {}
 
     def _load_ckpt(self, ckpt_dir: str) -> Tuple[torch.nn.Module, DataFrameNormalizer]:
         """Load model and normalizer from checkpoint directory.
@@ -105,10 +106,21 @@ class InferencePipeline:
         models_required = self.models_available[ll : i]
         logger.info(f"infer on {infer_date:%Y-%m-%d}, models required: {models_required}")
 
+        # delete model cache that is not required, free GPU memory
+        to_delete = [k for k in self.model_cache if k not in models_required]
+        for k in to_delete:
+            del self.model_cache[k]
+            logger.info(f"delete model on {k}.")
+
         pred_list = []
         for model_date in models_required:
             ckpt_dir = f"{self.args.save_dir}/{self.args.prod}/{model_date}/{CHECHPOINT_META.prefix_dir}"
-            _model, _normalizer = self._load_ckpt(ckpt_dir)
+            if model_date in self.model_cache:
+                _model, _normalizer = self.model_cache[model_date]
+            else:
+                _model, _normalizer = self._load_ckpt(ckpt_dir)
+                self.model_cache[model_date] = (_model, _normalizer)
+                
             _df = _normalizer.transform(deepcopy(df_cs))  # this is model specific
             x = (
                 _df.select(self.args.x_slot_columns)
