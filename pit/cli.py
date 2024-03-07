@@ -948,9 +948,9 @@ def infer_online(prod, date, debug):
     o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
-        next_date = gu.tcalendar.adjust(infer_date, 1).date().strftime("%Y-%m-%d")
+        next_date = gu.tcalendar.adjust(infer_date, 1).date()
         # replace date with next_date
-        o = o.with_columns(pl.lit(next_date).alias('date'))
+        o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias('date'))
 
     slot = args.y_slots
     assert isinstance(slot, str)
