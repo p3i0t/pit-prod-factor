@@ -948,9 +948,9 @@ def infer_online(prod, date, debug):
     o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
-        next_date = gu.tcalendar.adjust(infer_date, 1)
+        next_date = gu.tcalendar.adjust(infer_date, 1).date().strftime("%Y-%m-%d")
         # replace date with next_date
-        o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias('date'))
+        o = o.with_columns(pl.lit(next_date).alias('date'))
 
     slot = args.y_slots
     assert isinstance(slot, str)
@@ -998,6 +998,8 @@ def infer_hist(prod, begin, end, debug):
     from datetime import timedelta
     
     args = get_inference_config(prod=prod)
+    begin = any2ymd(begin)
+    end = any2ymd(end)
     o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=debug)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
