@@ -19,8 +19,13 @@ except ImportError:
     
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
 from pit.utils import any2ymd, any2date
-from pit.download import get_stock_minute
+from pit.download import get_stock_minute, get_ohlcv_minute, get_universe
 
+
+tasks_dict = {
+    'ohlcv_minute': get_ohlcv_minute,
+    'universe': get_universe,
+}
 
 # self-defined click ParamType by overriding the convert() method 
 # to convert the value (as str) to the desired type (date str)
@@ -58,13 +63,7 @@ DateType = ExtendedDate()
               help="number of ray parallel jobs.")
 @click.option("--verbose", '-v', default=False, type=bool, 
               help="whether to print details.")
-def download_1m(
-    dir: str,
-    begin: str,
-    end: str,
-    n_jobs: int,
-    verbose: bool
-):
+def download_1m(dir, begin, end, n_jobs, verbose):
     """Download 1min bars up to today."""    
     import ray
 
@@ -173,13 +172,85 @@ def download_1m(
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option('--task', '-t', 'task_name', default='ohlcv_minute', type=click.Choice(['ohlcv_minute', 'universe']))
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
-def download_univ(
-    dir: str,
-    begin: str,
-    end: str,
-    verbose: bool
-):
+def download(dir, begin, end, task_name, verbose):
+    """Daily Download Tasks."""
+    _dir = Path(dir)
+    _dir.mkdir(parents=True, exist_ok=True)
+    
+    if gu.tcalendar.trading(begin):
+        _begin = any2date(begin)
+    else:
+        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+    
+    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+    else:
+        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+        
+    if _begin <= _end:
+        pass
+    else:
+        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+        return
+
+    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+    
+    item = task_name
+    item_dir = _dir.joinpath(item)
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    left_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(left_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
+        return
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"data of {len(trading_dates)} dates in total")
+        click.echo(f"data of {len(existing_dates)} dates already exist.")
+        click.echo(f"data of {len(left_dates)} dates to be done.")
+    
+    df = tasks_dict[task_name](begin, end)
+    if df.is_empty():
+        click.echo("univ dataframe is empty.")
+        return
+    for d, _df in df.partition_by(["date"], as_dict=True).items():
+    # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+    click.echo(f"task {task_name} done.")
+
+
+@click.command()
+@click.option(
+    "--path", "dir",
+    default="/data2/private/wangxin/raw2",
+    type=click.Path(),
+    help="path directory to store the downloaded data, will be created if doesn't exist.",
+)
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
+def download_univ(dir, begin, end, verbose):
     """Download universe."""
     _dir = Path(dir)
     _dir.mkdir(parents=True, exist_ok=True)
@@ -272,12 +343,7 @@ def download_univ(
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
-def download_return(
-    dir: str,
-    begin: str,
-    end: str,
-    verbose: bool
-):
+def download_return(dir, begin, end, verbose):
     """Download return."""
     # from datetime import datetime, timedelta
     _dir = Path(dir)
@@ -459,12 +525,7 @@ def download_return(
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
-def download_lag_return(
-    dir: str,
-    begin: str,
-    end: str,
-    verbose: bool
-):
+def download_lag_return(dir, begin, end, verbose):
     """Download lag return."""
     # from datetime import datetime, timedelta
     _dir = Path(dir)
@@ -653,7 +714,7 @@ def download_lag_return(
     "--cpus_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
 )
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
-def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
+def long2widev2(_dir, n_jobs, n_cpu, verbose):
     """Long to wide for v2 bars.
     """
     import re
@@ -719,7 +780,7 @@ def long2widev2(_dir: str, n_jobs: int, n_cpu: int, verbose: bool):
 @click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
 @click.option('--cpu_per_task', 'n_cpu', default=4, type=int, help='number of cpus per task.')
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
-def downsample10(n_jobs, n_cpu: int, verbose: bool):
+def downsample10(n_jobs, n_cpu, verbose):
     """Downsample 1m to 10m.
     """
     src_dir = "/data2/private/wangxin/raw2/bar_1m"
@@ -821,8 +882,6 @@ def merge10_v2(n_jobs, n_cpu):
                 else:
                     os.remove(f"{tgt_dir}/{exists[0]}")
                     logger.info(f"remove {tgt_dir}/{exists[0]}")
-                    # dates = [_d for _d in dates if _d > cur_t]  # only merge new dates
-                    # df_cur = pl.scan_parquet(f"{tgt_dir}/{exist[0]}").collect()
             else:
                 for _file in exists:
                     os.remove(f"{tgt_dir}/{_file}")
@@ -988,9 +1047,9 @@ def infer_online(prod, date, debug):
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option(
-    "--debug", default=False, type=bool, help="print more information when debug is True."
+    "--verbose", default=False, type=bool, help="print more information when debug is True."
 )
-def infer_hist(prod, begin, end, debug):
+def infer_hist(prod, begin, end, verbose):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
@@ -1000,7 +1059,7 @@ def infer_hist(prod, begin, end, debug):
     args = get_inference_config(prod=prod)
     begin = any2ymd(begin)
     end = any2ymd(end)
-    o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, debug=debug)
+    o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, verbose=verbose)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
         date_lag = gu.tcalendar.getdf(begin, end)
