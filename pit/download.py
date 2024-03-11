@@ -32,6 +32,8 @@ def get_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         categorical_symbol=True,
     )
     
+    df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
+    
     df_factor: pl.DataFrame = dr.read(
         dr.meta.StockDaily(columns=['adj_factor']),
         begin=begin,
