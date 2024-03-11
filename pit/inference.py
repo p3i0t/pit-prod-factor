@@ -16,7 +16,6 @@ from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.utils import CHECHPOINT_META
-from pit.utils import any2datetime
 from pit.datasource import (OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
 
 logger = logger.bind(where="inference")
@@ -72,7 +71,7 @@ class InferencePipeline:
         return list(o.values())[0]
 
     def _forward_cross_sectional_batch(
-        self, infer_date: datetime.datetime = None, df_cs: pl.DataFrame = None
+        self, infer_date: datetime.datetime, df_cs: pl.DataFrame
     ) -> Dict[int, pl.DataFrame] | None:
         """
         Inference on a cross-sectional batch of data,
@@ -168,10 +167,11 @@ class InferenceMode(str, Enum):
 
 def infer(
     args: InferenceArguments,
-    infer_date: str|Tuple[str, str] = 'today',
+    infer_date: datetime.date | Tuple[datetime.date, datetime.date],
+    *,
     mode: InferenceMode = InferenceMode.online,
     log_path: Optional[str] = None,
-    debug: bool = False,
+    verbose: bool = False,
 ) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
     log_path = log_path or 'infer.log'
     logger.add(
@@ -181,19 +181,15 @@ def infer(
         )
     
     infer_logger = logger.bind(where="inference")
-    # construct data source
-    if isinstance(infer_date, str):
-        o = any2datetime(infer_date)
-        begin, end = o, o
-        infer_logger.info(f"{mode} inference on date: {o}")
+    if isinstance(infer_date, datetime.date):
+        begin, end = infer_date, infer_date
     elif isinstance(infer_date, tuple):
         begin, end = infer_date
-        begin = any2datetime(begin)
-        end = any2datetime(end)
-        infer_logger.info(f"{mode} inference on date range: {begin:%Y-%m-%d} to {end:%Y-%m-%d}")
     else:
-        raise TypeError(f"date in InferenceArguments should be str or Tuple[str, str], but is {type(infer_date)}")
+        raise TypeError(f"date in InferenceArguments should be datetime.date"
+                        f"or Tuple[datetime.date, datetime.date], but is {type(infer_date)}")
 
+    infer_logger.info(f'Inference mode: {mode}')
     if mode == InferenceMode.offline:
         ds = OfflineDataSource(
             data_path=str(args.dataset_dir) + '/*',
@@ -210,7 +206,7 @@ def infer(
             universe=args.universe,
             date_range=(begin, end),
             fill_nan=True,
-            debug=debug,
+            verbose=verbose,
         )
     elif mode == InferenceMode.online_submit:
         ds = Online10minDatareaderDataSource(
@@ -222,19 +218,19 @@ def infer(
     else:
         raise ValueError(f"mode: {mode} not supported.")
     
-    if debug is True:
+    if verbose is True:
         s = perf_counter()
     df: pl.DataFrame = ds.collect()
-    if debug is True:
+    if verbose is True:
         df.write_parquet(f"df_{mode}.parq")
 
-    if debug is True:
+    if verbose is True:
         t = perf_counter() - s
         logger.info(f"time to load data: {t:.2f}s")
         s = perf_counter()
     ip = InferencePipeline(args=args)
 
-    if debug is True:
+    if verbose is True:
         t = perf_counter() - s
         logger.info(f"InferencePipeline pass time: {t:.2f}s")
     return ip(df)

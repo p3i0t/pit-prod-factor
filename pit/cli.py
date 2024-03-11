@@ -61,9 +61,10 @@ DateType = ExtendedDate()
 )
 @click.option("--n_jobs", default=10, type=int, 
               help="number of ray parallel jobs.")
+@click.option('--mem_per_task', default=10, type=int, help="memory per task in GB.")
 @click.option("--verbose", '-v', default=False, type=bool, 
               help="whether to print details.")
-def download_1m(dir, begin, end, n_jobs, verbose):
+def download_1m(dir, begin, end, n_jobs, mem_per_task, verbose):
     """Download 1min bars up to today."""    
     import ray
 
@@ -117,7 +118,7 @@ def download_1m(dir, begin, end, n_jobs, verbose):
 
     ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
     
-    @ray.remote(max_calls=2)
+    @ray.remote(max_calls=2, memory=mem_per_task*1024*1024*1024)
     def remote_download(begin, end) -> None:
         df = get_stock_minute(begin, end)
         if df.is_empty():
