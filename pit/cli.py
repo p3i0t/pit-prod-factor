@@ -118,7 +118,7 @@ def download_1m(dir, begin, end, n_jobs, mem_per_task, verbose):
 
     ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
     
-    @ray.remote(max_calls=2, memory=mem_per_task*1024*1024*1024)
+    @ray.remote(max_calls=1, memory=mem_per_task*1024*1024*1024)
     def remote_download(begin, end) -> None:
         df = get_stock_minute(begin, end)
         if df.is_empty():
