@@ -28,7 +28,8 @@ def get_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
             version="3.1", abbr=True),
         begin=begin,
         end=end,
-        df_lib='polars'
+        df_lib='polars',
+        categorical_symbol=True,
     )
     return df
 
@@ -55,14 +56,16 @@ def get_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         dr.meta.StockMinute(columns=ohlcv),
         begin=begin,
         end=end,
-        df_lib='polars'
+        df_lib='polars',
+        categorical_symbol=True,
     )
     
     df_factor: pl.DataFrame = dr.read(
         dr.meta.StockDaily(columns=['adj_factor']),
         begin=begin,
         end=end,
-        df_lib='polars'
+        df_lib='polars',
+        categorical_symbol=True,
     )
     df = df.join(df_factor, on=['date', 'symbol'], how='left')
     return df
@@ -101,7 +104,7 @@ def get_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
         "mktcap",
     ]
     df: pl.DataFrame = dr.read(
-        dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars'
+        dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars', categorical_symbol=True
     )
     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
     return df
