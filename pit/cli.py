@@ -1125,6 +1125,7 @@ def pit():
 
 pit.add_command(train_single)
 pit.add_command(show)
+pit.add_command(download)
 pit.add_command(download_1m)
 pit.add_command(download_univ)
 pit.add_command(download_return)
