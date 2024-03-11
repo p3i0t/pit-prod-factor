@@ -31,34 +31,6 @@ def get_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         df_lib='polars',
         categorical_symbol=True,
     )
-    return df
-
-def get_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Get all ohlcv minute bars and adj_factor.
-
-    Args:
-        begin (Datetime): begin date.
-        end (Datetime): end date.
-
-    Raises:
-        ImportError: Error: module datareader not found
-
-    Returns:
-        pl.DataFrame: minute ohlcv bars and adj_factor.
-    """
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
-    ohlcv = ['open', 'high', 'low', 'close', 'volume']
-    
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockMinute(columns=ohlcv),
-        begin=begin,
-        end=end,
-        df_lib='polars',
-        categorical_symbol=True,
-    )
     
     df_factor: pl.DataFrame = dr.read(
         dr.meta.StockDaily(columns=['adj_factor']),

@@ -19,12 +19,12 @@ except ImportError:
     
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
 from pit.utils import any2ymd, any2date
-from pit.download import get_stock_minute, get_ohlcv_minute, get_universe
+from pit.download import get_stock_minute, get_universe
 
 
 tasks_dict = {
-    'ohlcv_minute': get_ohlcv_minute,
-    'universe': get_universe,
+    # 'ohlcv_minute': get_ohlcv_minute,
+    'univ': get_universe,
 }
 
 # self-defined click ParamType by overriding the convert() method 
@@ -172,7 +172,7 @@ def download_1m(dir, begin, end, n_jobs, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option('--task', '-t', 'task_name', default='ohlcv_minute', type=click.Choice(['ohlcv_minute', 'universe']))
+@click.option('--task', '-t', 'task_name', default='ohlcv_minute', type=click.Choice(list(tasks_dict.keys())))
 @click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
 def download(dir, begin, end, task_name, verbose):
     """Daily Download Tasks."""
@@ -230,97 +230,97 @@ def download(dir, begin, end, task_name, verbose):
     click.echo(f"task {task_name} done.")
 
 
-@click.command()
-@click.option(
-    "--path", "dir",
-    default="/data2/private/wangxin/raw2",
-    type=click.Path(),
-    help="path directory to store the downloaded data, will be created if doesn't exist.",
-)
-@click.option(
-    "--begin",
-    default="2017-01-01",
-    type=DateType,
-    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
-)
-@click.option(
-    "--end",
-    default="today",
-    type=DateType,
-    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
-)
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
-def download_univ(dir, begin, end, verbose):
-    """Download universe."""
-    _dir = Path(dir)
-    _dir.mkdir(parents=True, exist_ok=True)
+# @click.command()
+# @click.option(
+#     "--path", "dir",
+#     default="/data2/private/wangxin/raw2",
+#     type=click.Path(),
+#     help="path directory to store the downloaded data, will be created if doesn't exist.",
+# )
+# @click.option(
+#     "--begin",
+#     default="2017-01-01",
+#     type=DateType,
+#     help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+# )
+# @click.option(
+#     "--end",
+#     default="today",
+#     type=DateType,
+#     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+# )
+# @click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
+# def download_univ(dir, begin, end, verbose):
+#     """Download universe."""
+#     _dir = Path(dir)
+#     _dir.mkdir(parents=True, exist_ok=True)
     
-    if gu.tcalendar.trading(begin):
-        _begin = any2date(begin)
-    else:
-        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
-        if verbose is True:
-            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+#     if gu.tcalendar.trading(begin):
+#         _begin = any2date(begin)
+#     else:
+#         _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+#         if verbose is True:
+#             click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
     
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
-        _end = any2date(end)
-        if verbose is True:
-            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
-    else:
-        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
-        if verbose is True:
-            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+#     if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+#         _end = any2date(end)
+#         if verbose is True:
+#             click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+#     else:
+#         _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+#         if verbose is True:
+#             click.echo(f"end date {end} is not trading day, adjust to {_end}")
         
-    if _begin <= _end:
-        pass
-    else:
-        click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
-        return
+#     if _begin <= _end:
+#         pass
+#     else:
+#         click.echo(f"begin date {_begin} is later than end date {_end}, no need to download.")
+#         return
 
-    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
-    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+#     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
+#     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
     
-    item = 'univ'
-    item_dir = _dir.joinpath(item)
-    item_dir.mkdir(parents=True, exist_ok=True)
+#     item = 'univ'
+#     item_dir = _dir.joinpath(item)
+#     item_dir.mkdir(parents=True, exist_ok=True)
 
-    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    left_dates = sorted(set(trading_dates) - set(existing_dates))
+#     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+#     left_dates = sorted(set(trading_dates) - set(existing_dates))
 
-    if len(left_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
-        return
-    if verbose is True:
-        click.echo(f"Download {item} to directory={item_dir}")
-        click.echo(f"{len(trading_dates)} tasks in total")
-        click.echo(f"{len(existing_dates)} tasks already exist.")
-        click.echo(f"{len(left_dates)} tasks to be done.")
+#     if len(left_dates) == 0:
+#         click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
+#         return
+#     if verbose is True:
+#         click.echo(f"Download {item} to directory={item_dir}")
+#         click.echo(f"{len(trading_dates)} tasks in total")
+#         click.echo(f"{len(existing_dates)} tasks already exist.")
+#         click.echo(f"{len(left_dates)} tasks to be done.")
     
-    univs = [
-        "univ_research",
-        "univ_largemid",
-        "sz50",
-        "hs300",
-        "zz500",
-        "zz1000",
-        "zz2000",
-        "euniv_largemid",
-        "euniv_research",
-        "euniv_eresearch",
-        "univ_full",
-        "mktcap",
-    ]
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockUniverse(univs), begin=left_dates[0], end=left_dates[-1], df_lib='polars'
-    )
-    df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
-    if df.is_empty():
-        click.echo("univ dataframe is empty.")
-        return
-    for d, _df in df.partition_by(["date"], as_dict=True).items():
-    # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    click.echo("task univ done.")
+#     univs = [
+#         "univ_research",
+#         "univ_largemid",
+#         "sz50",
+#         "hs300",
+#         "zz500",
+#         "zz1000",
+#         "zz2000",
+#         "euniv_largemid",
+#         "euniv_research",
+#         "euniv_eresearch",
+#         "univ_full",
+#         "mktcap",
+#     ]
+#     df: pl.DataFrame = dr.read(
+#         dr.meta.StockUniverse(univs), begin=left_dates[0], end=left_dates[-1], df_lib='polars'
+#     )
+#     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
+#     if df.is_empty():
+#         click.echo("univ dataframe is empty.")
+#         return
+#     for d, _df in df.partition_by(["date"], as_dict=True).items():
+#     # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+#         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+#     click.echo("task univ done.")
 
 
 @click.command()
@@ -1125,9 +1125,9 @@ def pit():
 
 pit.add_command(train_single)
 pit.add_command(show)
-pit.add_command(download)
+# pit.add_command(download)
 pit.add_command(download_1m)
-pit.add_command(download_univ)
+# pit.add_command(download_univ)
 pit.add_command(download_return)
 pit.add_command(download_lag_return)
 pit.add_command(long2widev2)

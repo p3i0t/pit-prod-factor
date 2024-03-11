@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 from typing import Optional, Protocol, Union, List, Tuple
 
@@ -6,7 +7,7 @@ import polars as pl
 
 from dlkit.utils import get_time_slots
 from pit import get_bars
-from pit.utils import any2date, any2ymd, Datetime
+from pit.utils import any2date
 
 __all__ = ["DataSource", "OfflineDataSource", "OnlineV2DownsampleDataSource", "Online10minDatareaderDataSource"]
 
@@ -38,7 +39,7 @@ class OfflineDataSource(DataSource):
         columns: list[str],
         *,
         universe: Optional[str]=None, 
-        date_range: Optional[tuple[Datetime, Datetime]]=None,
+        date_range: Optional[tuple[datetime.date, datetime.date]]=None,
         date_col: Optional[str] = None,
         fill_nan: bool = True,
     ) -> None:
@@ -101,16 +102,16 @@ class OnlineV2DownsampleDataSource(DataSource):
         slot_range: Tuple[str, str],
         *,
         universe: Optional[str] = None,
-        date_range: Optional[tuple[Datetime, Datetime]]=None,
+        date_range: Optional[tuple[datetime.date, datetime.date]]=None,
         fill_nan: bool = True,
-        debug=False,
+        verbose=False,
     ) -> None:
         super().__init__()
         self.slot_range = slot_range
         self.universe = universe
         self.date_range = date_range
         self.fill_nan = fill_nan
-        self.debug = debug
+        self.verbose = verbose
         
             
     def collect(self) -> pl.DataFrame:
@@ -128,7 +129,7 @@ class OnlineV2DownsampleDataSource(DataSource):
         if self.date_range:
             infer_begin, infer_end = self.date_range
         else:
-            today = any2ymd("today")
+            today = any2date("today")
             infer_begin, infer_end = today, today
         
         slots_1min = get_time_slots(
@@ -202,10 +203,10 @@ class OnlineV2DownsampleDataSource(DataSource):
         # long to wide
         s = perf_counter()
         slots = df.get_column("slot").unique().sort().to_list()
-        if self.debug is True:
+        if self.verbose is True:
             logger.info("[debug] df after downsample:", df.select(["date", "symbol"]).head(5))
         df = df.pivot(index=["symbol", "date"], columns="slot", values=agg_columns)
-        if self.debug is True:
+        if self.verbose is True:
             logger.info("[debug] df after pivot:", df.select(["date", "symbol"]).head(5))
         name_mapping = {
             f"{col}_slot_{slt}": f"{col}_{slt}"
@@ -231,7 +232,7 @@ class Online10minDatareaderDataSource(DataSource):
         slot_range: Tuple[str, str],
         *,
         universe: Optional[str] = None,
-        date_range: Optional[tuple[Datetime, Datetime]]=None,
+        date_range: Optional[tuple[datetime.date, datetime.date]]=None,
         fill_nan: bool = True,
     ) -> None:
         super().__init__()
@@ -255,7 +256,7 @@ class Online10minDatareaderDataSource(DataSource):
             start=self.slot_range[0], end=self.slot_range[1], freq_in_min=10, bar_on_the_right=True
         )
         agg_pairs = ['avg', 'stddevSamp']
-        slot_dict = {r: (l, r) for l, r in zip(x_slots_l, x_slots_r)}
+        slot_dict = {rr: (ll, rr) for ll, rr in zip(x_slots_l, x_slots_r)}
 
         df_merged = pl.DataFrame()        
         for r_slot, _slot_range in slot_dict.items():
