@@ -1058,8 +1058,8 @@ def infer_hist(prod, begin, end, verbose):
     from datetime import timedelta
     
     args = get_inference_config(prod=prod)
-    begin = any2ymd(begin)
-    end = any2ymd(end)
+    begin = any2date(begin)
+    end = any2date(end)
     o = infer(args=args, infer_date=(begin, end), mode=InferenceMode.offline, verbose=verbose)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
@@ -1092,6 +1092,8 @@ def infer_hist(prod, begin, end, verbose):
     alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{use_begin}_{use_end}.parq"))
     
 
+
+
 @click.group()
 def pit():
     """pit: Alpha Signals Generator of Pit."""
@@ -1109,6 +1111,8 @@ def pit():
     if not os.path.exists(f"{pit_dir}/config.yml"):
         click.echo(f"Config file missing! generating default config file at {pit_dir}/config.yml")
         default_config = {
+            "RAW_DATA_DIR": "/data2/private/wangxin/raw2",
+            "DERIVED_DATA_DIR": "/data2/private/wangxin/derived",
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
             "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
             "SAVE_DIR": f"{pit_dir}/runs",
