@@ -309,13 +309,13 @@ class IntradayReturnDataSource(DataSource):
         l_indices = [x_slots.index(s) for s in self.slot]
         import itertools
         import datetime
-        all_index_pairs = [(ll, ll + dd) for ll, dd in itertools.product(l_indices, self.duration)]
-        all_slot_pairs = [(x_slots[ll], x_slots[rr]) for ll, rr in all_index_pairs]
+        all_triples = [(ll, ll + dd, dd) for ll, dd in itertools.product(l_indices, self.duration)]
+        all_slot_triples = [(x_slots[ll], x_slots[rr], dd) for ll, rr, dd in all_triples]
         all_slots = set()
         def slot_to_time(_x):
             return datetime.datetime.strptime(_x, '%H%M').time()
         
-        for ll, rr in all_slot_pairs:
+        for ll, rr, dd in all_slot_triples:
             all_slots.add(slot_to_time(ll))
             all_slots.add(slot_to_time(rr))
             
@@ -326,12 +326,13 @@ class IntradayReturnDataSource(DataSource):
             
             
             df_ret = df.pivot(index=["symbol", "date"], columns="slot", values=self.price)
-            name_mapping = {
-                f"{col}_slot_{slt}": f"{slt}"
-                for col, slt in itertools.product([self.price], all_slots)
-            }
-            df_ret = df_ret.rename(name_mapping)
-            df_ret = df_ret.with_columns(pl.col(_t).truediv(pl.col(_s)).alias(f"{_s}_{_t}") for _s, _t in all_slot_pairs)
+            # name_mapping = {
+            #     f"{col}_slot_{slt}": f"{slt}"
+            #     for col, slt in itertools.product([self.price], )
+            # }
+            # df_ret = df_ret.rename(name_mapping)
+            df = df_ret.drop([_s.strftime("%H%M") for _s in all_slots])
+            df_ret = df_ret.with_columns(pl.col(_t).truediv(pl.col(_s)).sub(1.0).alias(f"{_s}_{_t}_{_d}m") for _s, _t, _d in all_slot_triples)
             return df_ret
         
         
