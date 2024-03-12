@@ -289,3 +289,48 @@ class Online10minDatareaderDataSource(DataSource):
         if self.fill_nan:
             df_merged = df_merged.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
         return df_merged
+    
+    
+class IntradayReturnDataSource(DataSource):
+    def __init__(self, data_path: Path, slot: str|list[str], duration: str|list[str]='20m', price='close') -> None:
+        super().__init__()
+        self.data_path = data_path
+        self.slot = slot if isinstance(slot, list) else [slot]
+        duration = duration if isinstance(duration, list) else [duration]
+        assert all([d[-1] == 'm' for d in duration])
+        self.duration = [int(d[:-1]) for d in duration]
+        self.price = price
+        
+    def collect(self) -> pl.DataFrame:
+        x_slots = get_time_slots(
+            start='0930', end='1500', freq_in_min=1, bar_on_the_right=True
+        )
+        l_indices = [x_slots.index(s) for s in self.slot]
+        import itertools
+        import datetime
+        all_index_pairs = [(ll, ll + dd) for ll, dd in itertools.product(l_indices, self.duration)]
+        all_slot_pairs = [(x_slots[ll], x_slots[rr]) for ll, rr in all_index_pairs]
+        all_slots = set()
+        def slot_to_time(_x):
+            return datetime.datetime.strptime(_x, '%H%M').time()
+        
+        for ll, rr in all_slot_pairs:
+            all_slots.add(slot_to_time(ll))
+            all_slots.add(slot_to_time(rr))
+            
+        df = pl.scan_parquet(self.data_path)
+        df = df.filter(pl.col('time').dt.time().is_in(all_slots))
+        df = df.with_columns(pl.col('time').dt.strftime("%H%M").alias('slot')).collect()
+        
+        
+        df_ret = df.pivot(index=["symbol", "date"], columns="slot", values=self.price)
+        name_mapping = {
+            f"{col}_slot_{slt}": f"{slt}"
+            for col, slt in itertools.product([self.price], all_slots)
+        }
+        df_ret = df_ret.rename(name_mapping)
+        df_ret = df_ret.with_columns(pl.col(_t).truediv(pl.col(_s)).alias(f"{_s}_{_t}") for _s, _t in all_slot_pairs)
+        return df_ret
+        
+        
+        
