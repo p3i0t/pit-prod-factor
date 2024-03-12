@@ -319,19 +319,20 @@ class IntradayReturnDataSource(DataSource):
             all_slots.add(slot_to_time(ll))
             all_slots.add(slot_to_time(rr))
             
-        df = pl.scan_parquet(self.data_path)
-        df = df.filter(pl.col('time').dt.time().is_in(all_slots))
-        df = df.with_columns(pl.col('time').dt.strftime("%H%M").alias('slot')).collect()
-        
-        
-        df_ret = df.pivot(index=["symbol", "date"], columns="slot", values=self.price)
-        name_mapping = {
-            f"{col}_slot_{slt}": f"{slt}"
-            for col, slt in itertools.product([self.price], all_slots)
-        }
-        df_ret = df_ret.rename(name_mapping)
-        df_ret = df_ret.with_columns(pl.col(_t).truediv(pl.col(_s)).alias(f"{_s}_{_t}") for _s, _t in all_slot_pairs)
-        return df_ret
+        with pl.StringCache():
+            df = pl.scan_parquet(self.data_path)
+            df = df.filter(pl.col('time').dt.time().is_in(all_slots))
+            df = df.with_columns(pl.col('time').dt.strftime("%H%M").alias('slot')).collect()
+            
+            
+            df_ret = df.pivot(index=["symbol", "date"], columns="slot", values=self.price)
+            name_mapping = {
+                f"{col}_slot_{slt}": f"{slt}"
+                for col, slt in itertools.product([self.price], all_slots)
+            }
+            df_ret = df_ret.rename(name_mapping)
+            df_ret = df_ret.with_columns(pl.col(_t).truediv(pl.col(_s)).alias(f"{_s}_{_t}") for _s, _t in all_slot_pairs)
+            return df_ret
         
         
         
