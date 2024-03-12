@@ -89,4 +89,5 @@ def downsample_1m_to_10m(
         for col, slt in itertools.product(agg_columns, slots)
     }
     _df = _df.rename(name_mapping)
+    _df = _df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
     return _df

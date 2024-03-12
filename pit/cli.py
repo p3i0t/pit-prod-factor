@@ -795,7 +795,7 @@ def downsample10(n_jobs, n_cpu, verbose):
 
     @ray.remote(max_calls=3)
     def _downsample(file):
-        bars = get_bars("v2")
+        bars = get_bars("v3")
         downsample_1m_to_10m(
             pl.scan_parquet(f"{src_dir}/{file}"), bars=bars
         ).write_parquet(f"{tgt_dir}/{file}")
