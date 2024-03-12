@@ -784,6 +784,7 @@ def long2widev2(_dir, n_jobs, n_cpu, verbose):
 def downsample10(n_jobs, n_cpu, verbose):
     """Downsample 1m to 10m.
     """
+    import glob
     src_dir = "/data2/private/wangxin/raw2/bar_1m"
     tgt_dir = "/data2/private/wangxin/raw2/bar_10m"
     from pit.downsample import downsample_1m_to_10m
@@ -792,6 +793,7 @@ def downsample10(n_jobs, n_cpu, verbose):
         click.echo(f"downsample from {src_dir} to {tgt_dir}")
     Path(tgt_dir).mkdir(parents=True, exist_ok=True)
     import ray
+    import re
 
     @ray.remote(max_calls=3)
     def _downsample(file):
@@ -801,10 +803,14 @@ def downsample10(n_jobs, n_cpu, verbose):
         ).write_parquet(f"{tgt_dir}/{file}")
         return file
 
-    src_files = set(os.listdir(src_dir))
-    tgt_files = set(os.listdir(tgt_dir))
-    left_files = sorted(src_files - tgt_files)
-    click.echo(f"{len(left_files)} downsample tasks to be done.")
+    src_files = set(glob.glob(f"{src_dir}/*.parq"))
+    tgt_files = set(glob.glob(f"{tgt_dir}/*.parq"))
+    
+    src_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in src_files])
+    tgt_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in tgt_files])
+    left_dates = sorted(src_dates - tgt_dates)
+    click.echo(f"{len(left_dates)} downsample tasks to be done.")
+    left_files = [f"{d}.parq" for d in left_dates]
 
     task_ids = []
     n_task_finished = 0
