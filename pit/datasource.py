@@ -292,6 +292,7 @@ class Online10minDatareaderDataSource(DataSource):
     
     
 class IntradayReturnDataSource(DataSource):
+    name = 'intraday_return'
     def __init__(self, data_path: Path, slot: str|list[str], duration: str|list[str]='20m', price='close') -> None:
         super().__init__()
         self.data_path = data_path
