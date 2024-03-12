@@ -19,11 +19,11 @@ except ImportError:
     
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
 from pit.utils import any2ymd, any2date
-from pit.download import get_stock_minute, get_universe
+from pit.download import get_stock_minute, get_universe, get_ohlcv_minute
 
 
 tasks_dict = {
-    # 'ohlcv_minute': get_ohlcv_minute,
+    'ohlcv_minute': get_ohlcv_minute,
     'univ': get_universe,
 }
 
