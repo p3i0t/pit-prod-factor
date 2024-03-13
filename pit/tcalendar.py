@@ -5,6 +5,7 @@ import os
 import polars as pl
 from pit.utils import any2ymd, Datetime
 
+__all__ = ["is_trading_day", "get_tcalendar_df", "adjust"]
 
 def _load_tcalendar() -> list[str]:
     """Load trading calendar from file.
@@ -42,24 +43,21 @@ def is_trading_day(date: Datetime) -> bool:
     return is_string_in_list(_load_tcalendar(), any2ymd(date))
 
 
-@lru_cache(maxsize=10)
-def get_tcalendar_df(n_shift: int) -> pl.DataFrame:
+def get_tcalendar_df(n_next: int) -> pl.DataFrame:
     """Get trading calendar dataframe.
 
     Args:
-        n_shift (int): shift.
+        n_next (int): number of next days.
 
     Returns:
         pl.DataFrame: trading calendar dataframe.
     """
     tcalendar = _load_tcalendar()
-    df = pl.DataFrame({
-        'date': tcalendar,
-    })
+    df = pl.DataFrame({'date': tcalendar})
     df = df.with_columns(
         pl.col('date').cast(pl.Date),
     )
-    df = df.with_columns(pl.col('date').shift(n_shift).alias('date_shift'))
+    df = df.with_columns(pl.col('date').shift(-n_next).alias('next'))
     return df
 
 
