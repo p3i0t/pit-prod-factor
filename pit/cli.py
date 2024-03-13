@@ -19,7 +19,7 @@ except ImportError:
     
 from pit import list_prods, get_bars, get_training_config, get_inference_config, TrainPipeline
 from pit.utils import any2ymd, any2date
-from pit.download import get_stock_minute, get_universe, get_ohlcv_minute
+from pit.download import get_stock_minute, get_universe, get_ohlcv_minute, download_tcalendar
 
 
 tasks_dict = {
@@ -62,7 +62,7 @@ DateType = ExtendedDate()
 @click.option("--n_jobs", default=10, type=int, 
               help="number of ray parallel jobs.")
 @click.option('--mem_per_task', default=10, type=int, help="memory per task in GB.")
-@click.option("--verbose", '-v', default=False, type=bool, 
+@click.option("--verbose", '-v', is_flag=True,
               help="whether to print details.")
 def download_1m(dir, begin, end, n_jobs, mem_per_task, verbose):
     """Download 1min bars up to today."""    
@@ -174,7 +174,7 @@ def download_1m(dir, begin, end, n_jobs, mem_per_task, verbose):
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option('--task', '-t', 'task_name', default='ohlcv_minute', type=click.Choice(list(tasks_dict.keys())))
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
+@click.option("--verbose", '-v', is_flag=True, help="whether to print details.")
 def download(dir, begin, end, task_name, verbose):
     """Daily Download Tasks."""
     _dir = Path(dir)
@@ -343,7 +343,7 @@ def download(dir, begin, end, task_name, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
+@click.option("--verbose", '-v', is_flag=True, help="whether to print details.")
 def download_return(dir, begin, end, verbose):
     """Download return."""
     # from datetime import datetime, timedelta
@@ -525,7 +525,7 @@ def download_return(dir, begin, end, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print details.")
+@click.option("--verbose", '-v', is_flag=True, help="whether to print details.")
 def download_lag_return(dir, begin, end, verbose):
     """Download lag return."""
     # from datetime import datetime, timedelta
@@ -714,7 +714,7 @@ def download_lag_return(dir, begin, end, verbose):
 @click.option(
     "--cpus_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
 )
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
+@click.option("--verbose", '-v', is_flag=True, help="whether to print progress.")
 def long2widev2(_dir, n_jobs, n_cpu, verbose):
     """Long to wide for v2 bars.
     """
@@ -780,7 +780,7 @@ def long2widev2(_dir, n_jobs, n_cpu, verbose):
 @click.command()
 @click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
 @click.option('--cpu_per_task', 'n_cpu', default=4, type=int, help='number of cpus per task.')
-@click.option("--verbose", '-v', default=False, type=bool, help="whether to print progress.")
+@click.option("--verbose", '-v', is_flag=True, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu, verbose):
     """Downsample 1m to 10m.
     """
@@ -840,7 +840,6 @@ def downsample10(n_jobs, n_cpu, verbose):
 @click.option(
     "--cpu_per_task", 'n_cpu', default=2, type=int, help="number of cpus per task."
 )
-# @click.option("--verbose", default=False, type=bool, help='whether to print progress.')
 def merge10_v2(n_jobs, n_cpu):
     dir_10m = "/data2/private/wangxin/raw2/bar_10m"
     dir_univ = "/data2/private/wangxin/raw2/univ"
@@ -934,26 +933,21 @@ def merge10_v2(n_jobs, n_cpu):
             logger.info(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
     
-# @click.command()
-# @click.option('--source', default='bopu', help='source of calendar data')
-# def update_calendar(source: Literal['akshare', 'bopu'] = 'bopu'):
-#     import os
-#     import pickle
-#     script_directory = os.path.dirname(os.path.abspath(__file__))
-#     if source == "akshare":
-#         save_path = os.path.join(script_directory, 'ak_calendar.pkl')
-#         import akshare as ak
-#         df = ak.tool_trade_date_hist_sina()
-#         trade_dates = [d.strftime('%Y-%m-%d') for d in sorted(df['trade_date']) if d.strftime('%Y-%m-%d') > '2017-01-01']
-#         pickle.dump(trade_dates, open(save_path, 'wb'))
-#     else:
-#         try:
-#             import genutils as gu  # noqa
-#         except ImportError:
-#             gu = None
-#         trade_dates = gu.get_trade_dates()
-#         save_path = os.path.join(script_directory, 'bopu_calendar.pkl')
-#     return trade_dates
+@click.command()
+@click.option('--verbose', '-v', is_flag=True, help='whether to print more information.')
+def update_calendar(verbose):
+    import os
+    pit_dir = os.path.join(
+        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    
+    tclendar_series = download_tcalendar()
+    calendar_path = f"{pit_dir}/tcalendar.csv"
+    
+    if verbose:
+        click.echo(f"Updating calendar to {calendar_path}")
+        click.echo(f"{len(tclendar_series)} dates from {tclendar_series[0]} to {tclendar_series[-1]}.")
+    tclendar_series.to_frame().write_csv(calendar_path)    
+
 
 @click.command()
 @click.option('--prod', '-p', 
@@ -1054,7 +1048,7 @@ def infer_online(prod, date, debug):
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
 @click.option(
-    "--verbose", default=False, type=bool, help="print more information when debug is True."
+    "--verbose", is_flag=True, help="print more information when debug is True."
 )
 def infer_hist(prod, begin, end, verbose):
     """Inference on historical data.
@@ -1098,8 +1092,6 @@ def infer_hist(prod, begin, end, verbose):
     alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{use_begin}_{use_end}.parq"))
     
 
-
-
 @click.group()
 def pit():
     """pit: Alpha Signals Generator of Pit."""
@@ -1120,7 +1112,7 @@ def pit():
             "RAW_DATA_DIR": "/data2/private/wangxin/raw2",
             "DERIVED_DATA_DIR": "/data2/private/wangxin/derived",
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
-            "CALENDAR_PATH": f"{pit_dir}/calendar.pkl",
+            # "CALENDAR_PATH": f"{pit_dir}/tcalendar.csv",
             "SAVE_DIR": f"{pit_dir}/runs",
             "INFER_DIR": f"{pit_dir}/inference",
         }
@@ -1146,6 +1138,7 @@ pit.add_command(downsample10)
 pit.add_command(merge10_v2)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
+pit.add_command(update_calendar)
 
 if __name__ == "__main__":
     pit()

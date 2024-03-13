@@ -1,3 +1,5 @@
+import datetime
+from typing import Optional
 import polars as pl
 
 from pit.utils import Datetime
@@ -123,3 +125,35 @@ def get_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     )
     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
     return df
+
+
+
+def last_day_of_year(year: Optional[int] = None) -> datetime.date:
+    if year is None:
+        year = datetime.datetime.now().year
+    return datetime.date(year, 12, 31)
+
+
+def download_tcalendar(begin: Datetime = '20150101', end: Optional[Datetime] = None) -> pl.Series:
+    """Download trading calendar from external data source.
+
+    Args:
+        begin (Datetime): begin date.
+        end (Datetime): end date.
+
+    Raises:
+        ImportError: Error: module datareader not found
+
+    Returns:
+        pl.DataFrame: trading calendar.
+    """
+    try:
+        import genutils as gu
+    except ImportError:
+        raise ImportError("Error: module datareader not found")
+
+    _end = last_day_of_year() if end is None else end
+    _df = gu.tcalendar.getdf(begin=begin, end=_end)
+    calendar_series: pl.Series = pl.from_pandas(_df['date'])
+    calendar_series = calendar_series.cast(pl.Date).sort().unique(maintain_order=True)
+    return calendar_series
