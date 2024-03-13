@@ -144,21 +144,20 @@ def get_time_slots(
     return slots
 
 
-def get_gap_days_and_end(start: str, duration: str) -> Tuple[int, str]:
-    """get the end time given start time and duration.
+def compute_gap_days_and_end_slot(slot: str, duration: str) -> Tuple[int, str]:
+    """compute the end time given start time and duration.
 
     Args:
-        start (str): start time.
+        slot (str): start intraday trading slot, i.e. 0931-1130 and 1301-1500.
         duration (str): duration string like '1d2h3m'.
 
     Returns:
-        str: end time.
+        str: end intraday trading slot.
     """
     _d, _m = parse_dhm(duration)
-    
     slots = get_time_slots(start='0930', end="1500", freq_in_min=1, bar_on_the_right=True)
     
-    s_index = slots.index(start)
+    s_index = slots.index(slot)
     n_days, t_idnex = divmod(s_index + _m, len(slots))
     end = slots[t_idnex]
     n_days += _d

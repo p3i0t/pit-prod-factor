@@ -3,9 +3,9 @@ import datetime
 from functools import lru_cache
 import os
 import polars as pl
-from pit.utils import any2ymd, Datetime
+from pit.utils import any2ymd, Datetime, compute_gap_days_and_end_slot
 
-__all__ = ["is_trading_day", "get_tcalendar_df", "adjust"]
+__all__ = ["is_trading_day", "get_tcalendar_df", "adjust_date"]
 
 def _load_tcalendar() -> list[str]:
     """Load trading calendar from file.
@@ -61,7 +61,7 @@ def get_tcalendar_df(n_next: int) -> pl.DataFrame:
     return df
 
 
-def adjust(date: Datetime, n_shift: int) -> datetime.date:
+def adjust_date(date: Datetime, n_shift: int) -> datetime.date:
     """Adjust date with shift.
 
     Args:
@@ -74,7 +74,30 @@ def adjust(date: Datetime, n_shift: int) -> datetime.date:
     _date = any2ymd(date)
     tcalendar_list = _load_tcalendar()
     ii = bisect.bisect_left(tcalendar_list, _date)
+    if tcalendar_list[ii] != _date and n_shift > 0:
+        n_shift -= 1
     jj = ii + n_shift
     if jj < 0 or jj >= len(tcalendar_list):
         raise IndexError(f"Index out of calendar: {jj}")
     return datetime.datetime.strptime(tcalendar_list[jj], "%Y-%m-%d").date()
+
+
+def adjust_tcalendar_slot(slot: str, duration: str) -> pl.DataFrame:
+    """Adjust duration with shift.
+
+    Args:
+        duration (str): duration.
+        n_shift (int): shift.
+
+    Returns:
+        str: adjusted duration.
+    """
+    n_next, end_slot = compute_gap_days_and_end_slot(slot, duration)
+    df = get_tcalendar_df(n_next)
+    start_duration = pl.duration(hours=int(slot[:2]), minutes=int(slot[2:]))
+    end_duration = pl.duration(hours=int(end_slot[:2]), minutes=int(end_slot[2:]))
+    df = df.with_columns(
+        pl.col('date').cast(pl.Datetime(time_unit='ns')).add(start_duration),
+        pl.col('next').cast(pl.Datetime(time_unit='ns')).add(end_duration),
+    )
+    return df
