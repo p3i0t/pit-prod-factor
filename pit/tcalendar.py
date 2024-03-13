@@ -19,7 +19,7 @@ def _load_tcalendar() -> list[str]:
     return pl.read_csv(calendar_path).get_column('date').to_list()
 
 
-def is_string_in_list(sorted_list: list[str], target: str):
+def is_string_in_list(sorted_list: list[str], target: str) -> bool:
     """
     Checks if a target string is in the sorted list.
     Returns True if the target is found, otherwise False.
