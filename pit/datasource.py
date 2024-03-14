@@ -7,7 +7,8 @@ import polars as pl
 
 from dlkit.utils import get_time_slots
 from pit import get_bars
-from pit.utils import any2date, parse_dhm
+from pit.utils import any2date
+from pit.tcalendar import _parse_dhm
 
 __all__ = ["DataSource", "OfflineDataSource", "OnlineV2DownsampleDataSource", "Online10minDatareaderDataSource"]
 
@@ -299,7 +300,7 @@ class IntradayReturnDataSource(DataSource):
         self.slot = slot if isinstance(slot, list) else [slot]
         duration = duration if isinstance(duration, list) else [duration]
         assert all([d[-1] == 'm' for d in duration])
-        self.duration = [parse_dhm(d)[1] for d in duration]
+        self.duration = [_parse_dhm(d)[1] for d in duration]
         self.price = price
         
     def collect(self) -> pl.DataFrame:
