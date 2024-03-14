@@ -190,11 +190,11 @@ def download(dir, begin, end, task_name, verbose):
     if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
         _end = any2date(end)
         if verbose is True:
-            click.echo(f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}")
+            click.echo(f"end date {end} is trading day and data is available at now (after 2330), adjust to {_end}")
     else:
         _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
         if verbose is True:
-            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+            click.echo(f"end date {end} adjust to {_end}")
         
     if _begin <= _end:
         pass
@@ -852,8 +852,6 @@ def merge10_v2(n_jobs, n_cpu):
     import re
     import ray
     import itertools
-    # from optimus.data.sources.bopu import BopuStockBars
-    # from optimus.utils import get_time_slots
     from dlkit.utils import get_time_slots
 
     bars = get_bars('v2')
@@ -918,8 +916,6 @@ def merge10_v2(n_jobs, n_cpu):
     task_ids = []
     n_task_finished = 0
     for _month, _dates in monthly_groups.items():
-        # if verbose is True:
-        #     click.echo(f"running on {file}")
         task_id = _merge.options(
             name="x",
             num_cpus=n_cpu,
@@ -933,9 +929,12 @@ def merge10_v2(n_jobs, n_cpu):
             logger.info(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
     
+
 @click.command()
 @click.option('--verbose', '-v', is_flag=True, help='whether to print more information.')
-def update_calendar(verbose):
+def update_tcalendar(verbose):
+    """Update trading calendar.
+    """
     import os
     pit_dir = os.path.join(
         os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
@@ -987,9 +986,9 @@ def show(prod, mode):
               help='product to infer')
 @click.option('--date', '-d', default='today', help='the date of data used for inference.')
 @click.option(
-    "--debug", default=False, type=bool, help="whether to print progress."
+    "--verbose", '-v', is_flag=True, help="whether to print more information."
 )
-def infer_online(prod, date, debug):
+def infer_online(prod, date, verbose):
     """Online inference on single date.
     
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -998,14 +997,14 @@ def infer_online(prod, date, debug):
     from pit.inference import infer, InferenceMode
     from datetime import timedelta
     
-    infer_date: str = any2ymd(date)
+    infer_date = any2date(date)
     args = get_inference_config(prod=prod)
     
     if len(gu.tcalendar.get(infer_date, infer_date)) == 0:
         print(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
     
-    o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, debug=debug)
+    o = infer(args=args, infer_date=infer_date, mode=InferenceMode.online, verbose=verbose)
     assert isinstance(o, pl.DataFrame)
     if prod in ['0930', '0930_1h']:
         next_date = gu.tcalendar.adjust(infer_date, 1).date()
@@ -1112,7 +1111,7 @@ def pit():
             "RAW_DATA_DIR": "/data2/private/wangxin/raw2",
             "DERIVED_DATA_DIR": "/data2/private/wangxin/derived",
             "DATASET_DIR": "/data2/private/wangxin/dataset/10m_v2",
-            # "CALENDAR_PATH": f"{pit_dir}/tcalendar.csv",
+            "TCALENDAR_PATH": f"{pit_dir}/tcalendar.csv",
             "SAVE_DIR": f"{pit_dir}/runs",
             "INFER_DIR": f"{pit_dir}/inference",
         }
@@ -1130,7 +1129,6 @@ pit.add_command(train_single)
 pit.add_command(show)
 pit.add_command(download)
 pit.add_command(download_1m)
-# pit.add_command(download_univ)
 pit.add_command(download_return)
 pit.add_command(download_lag_return)
 pit.add_command(long2widev2)
@@ -1138,7 +1136,7 @@ pit.add_command(downsample10)
 pit.add_command(merge10_v2)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
-pit.add_command(update_calendar)
+pit.add_command(update_tcalendar)
 
 if __name__ == "__main__":
     pit()
