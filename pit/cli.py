@@ -1027,13 +1027,12 @@ def infer_hist(prod, begin, end, verbose):
 
 @click.command()
 def init():
-    from pit_utils.config import init_config
+    from pit.config import init_config
     home_dir = init_config()
     click.echo(f'Initialize config as {home_dir}')
     
 @click.command()
 def show_config():
-    from pit_utils.config import read_config
     cfg = read_config()
     click.echo(cfg)
 
