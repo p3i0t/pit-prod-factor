@@ -4,9 +4,10 @@ import polars as pl
 
 from pit.utils import Datetime
 
+__all__ = ['download_stock_minute', 'download_ohlcv_minute', 'download_universe', 'download_tcalendar']
 
-def get_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Get all stock minute bars from clickhouse.
+def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
+    """Download all stock minute bars from clickhouse.
 
     Args:
         begin (Datetime): begin date.
@@ -47,8 +48,8 @@ def get_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     return df
 
     
-def get_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Get all stock minute bars from clickhouse.
+def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
+    """Download all stock minute bars from clickhouse.
 
     Args:
         begin (Datetime): begin date.
@@ -88,7 +89,7 @@ def get_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     return df
 
 
-def get_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
+def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     """Get universe from clickhouse.
 
     Args:
@@ -139,7 +140,7 @@ def download_tcalendar(begin: Datetime = '20150101', end: Optional[Datetime] = N
 
     Args:
         begin (Datetime): begin date.
-        end (Datetime): end date.
+        end (Datetime): end date, default to last day of year.
 
     Raises:
         ImportError: Error: module datareader not found

@@ -70,11 +70,6 @@ def downsample_1m_to_10m(
         include_boundaries=True,
     ).agg(expr_list).collect()
 
-    # _df = (
-    #     df.pipe(select_trading_time_df, bars=bars)
-    #     .pipe(downsample_to_10m, agg_expr_list=expr_list)
-    #     .collect()
-    # )
     _df: pl.DataFrame = _df.with_columns(
         [
             pl.col("_upper_boundary").dt.strftime("%H%M").alias("slot"),
