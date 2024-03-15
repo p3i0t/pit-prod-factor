@@ -111,7 +111,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
 
     cfg = read_config()
     item = "bar_1m"
-    item_dir = cfg.raw.bar_1m.dir
+    item_dir = Path(cfg.raw.dir).joinpath(item)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
     left_dates = sorted(set(trading_dates) - set(existing_dates))
@@ -215,7 +215,7 @@ def download(begin, end, task_name, verbose):
 
     cfg = read_config()
     item = task_name
-    item_dir = Path(cfg.raw[item]["dir"])
+    item_dir = Path(cfg.raw.dir).joinpath(item)
     # item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
@@ -321,7 +321,7 @@ def downsample10(n_jobs, n_cpu, verbose):
 
     cfg = read_config()
     src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
-    tgt_dir = Path(cfg.derived_dir).joinpath("bar_10m")
+    tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
     from pit.downsample import downsample_1m_to_10m
 
     if verbose is True:
