@@ -215,8 +215,8 @@ def download(begin, end, task_name, verbose):
 
     cfg = read_config()
     item = task_name
-    item_dir = cfg.raw[item]["dir"]
-    item_dir.mkdir(parents=True, exist_ok=True)
+    item_dir = Path(cfg.raw[item]["dir"])
+    # item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
     left_dates = sorted(set(trading_dates) - set(existing_dates))
