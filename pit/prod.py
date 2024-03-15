@@ -1,24 +1,10 @@
 from enum import Enum
-import os
 from typing import Optional, Literal
+from omegaconf import OmegaConf, DictConfig
 
 from dlkit.train import TrainArguments
 from dlkit.inference import InferenceArguments
 
-
-from omegaconf import OmegaConf, DictConfig
-# OmegaConf.register_new_resolver(
-#     "resolve_returns", 
-#     lambda prefix, slot, delay, durations, suffix: 
-#         [f"{prefix}{int(slot)+int(delay):04d}_{d}{suffix}" for d in durations]
-#     )
-# OmegaConf.register_new_resolver(
-#     "resolve_d_out", lambda durations: len(durations)
-# )
-# OmegaConf.register_new_resolver(
-#     'resolve_x_slots', lambda x_begin, x_end, x_freq: get_time_slots(x_begin, x_end, freq_in_min=x_freq)
-# )
- 
  
 __all__ = ['get_bars', 'get_training_config', 'get_inference_config', 'list_prods', 'ProdsAvailable']
 
@@ -1493,7 +1479,6 @@ def get_prod_data_config(
 
     _prefix = f"{cfg['ret_prefix']}{int(cfg['slot'])+int(cfg['delay']):04d}"
     cfg['y_cols'] = [f"{_prefix}_{_d}" for _d in cfg['ret_durations']]
-    # cfg['experiment_dir'] = f"prod_runs/{cfg['slot']}"
     return OmegaConf.create(cfg)
         
 
@@ -1517,7 +1502,6 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     from pit.utils import any2ymd
     if milestone is None:
         milestone = any2ymd('today')
-        # raise ValueError("milestone must be specified")
     
     # Get absolute path to the directory this script (or module) is in
     # script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -1527,21 +1511,13 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
                          f"available prods: {prod_available}")
     from pathlib import Path
 
-    # prod_cfg = OmegaConf.load(os.path.join(script_dir, f'pred/{prod}.yaml'))
     prod_cfg = get_prod_data_config(prod=prod)
-    # meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
     from pit.tcalendar import load_tcalendar_list
     from pit.config import read_config
     pit_cfg = read_config()
-    # if not os.path.exists(cfg.tcalendar_path):
-    #     raise FileNotFoundError(f"tcalendar_path: {cfg.tcalendar_path} does not exist")
-    # if os.path.isfile(cfg.tcalendar_path) is False:
-    #     raise ValueError(f"tcalendar_path: {cfg.tcalendar_path} does not exist")
-    # else:
-    #     cld = pickle.load(open(env_cfg.CALENDAR_PATH, 'rb'))
 
     train_range, eval_range, test_range = split_date_ranges(
         load_tcalendar_list(), milestone=milestone, 
@@ -1590,23 +1566,18 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
     if prod is None:
         raise ValueError("prod must be specified")
     
-    # Get absolute path to the directory this script (or module) is in
-    # script_dir = os.path.dirname(os.path.realpath(__file__))
     prod_available = list_prods()
     if prod not in prod_available:
         raise ValueError(f"prod {prod} not available, "
                          f"available prods: {prod_available}")
 
     prod_cfg = get_prod_data_config(prod=prod)
-    # meta_cfg = OmegaConf.load(os.path.join(script_dir, 'config.yaml'))
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
     from pit.config import read_config
     from pathlib import Path
     pit_cfg = read_config()
-    
-
     data_dir = Path(pit_cfg.dataset['10m_v2']['dir'])
     save_dir = Path(pit_cfg.save_dir)
     args = InferenceArguments(
