@@ -1551,8 +1551,8 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         n_test=cfg.n_test
         )
 
-    dataset_dir = Path(pit_cfg['dateset']['10m_v2']['dir'])
-    save_dir = Path(pit_cfg['save_dir'])
+    dataset_dir = Path(pit_cfg.dataset['10m_v2']['dir'])
+    save_dir = Path(pit_cfg.save_dir)
     args = TrainArguments(
         prod=prod,
         save_dir=save_dir,
