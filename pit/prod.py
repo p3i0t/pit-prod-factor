@@ -1534,25 +1534,26 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
-    pit_dir = os.path.join(
-        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    env_cfg = OmegaConf.load(open(f"{pit_dir}/config.yml"))
-    
-    if os.path.isfile(env_cfg.CALENDAR_PATH) is False:
-        raise ValueError("CALENDAR_PATH {env_cfg.CALENDAR_PATH} does not exist")
-    else:
-        cld = pickle.load(open(env_cfg.CALENDAR_PATH, 'rb'))
+    from pit.tcalendar import load_tcalendar_list
+    from pit.config import read_config
+    pit_cfg = read_config()
+    # if not os.path.exists(cfg.tcalendar_path):
+    #     raise FileNotFoundError(f"tcalendar_path: {cfg.tcalendar_path} does not exist")
+    # if os.path.isfile(cfg.tcalendar_path) is False:
+    #     raise ValueError(f"tcalendar_path: {cfg.tcalendar_path} does not exist")
+    # else:
+    #     cld = pickle.load(open(env_cfg.CALENDAR_PATH, 'rb'))
 
     train_range, eval_range, test_range = split_date_ranges(
-        cld, milestone=milestone, 
+        load_tcalendar_list(), milestone=milestone, 
         n_train=cfg.n_train, 
         n_eval=cfg.n_eval, 
         n_lag=cfg.n_lag, 
         n_test=cfg.n_test
         )
 
-    dataset_dir = Path(env_cfg.DATASET_DIR)
-    save_dir = Path(env_cfg.SAVE_DIR)
+    dataset_dir = Path(pit_cfg['dateset']['10m_v2']['dir'])
+    save_dir = Path(pit_cfg['save_dir'])
     args = TrainArguments(
         prod=prod,
         save_dir=save_dir,
@@ -1602,14 +1603,13 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
     meta_cfg = _default_config
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
-    pit_dir = os.path.join(
-        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    env_cfg = OmegaConf.load(open(f"{pit_dir}/config.yml"))
+    from pit.config import read_config
+    pit_cfg = read_config()
     
     from pathlib import Path
 
-    data_dir = Path(env_cfg.DATASET_DIR)
-    save_dir = Path(env_cfg.SAVE_DIR)
+    data_dir = Path(pit_cfg['dateset']['10m_v2']['dir'])
+    save_dir = Path(pit_cfg['save_dir'])
     args = InferenceArguments(
         prod=prod,
         save_dir=save_dir,
