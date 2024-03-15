@@ -488,9 +488,10 @@ def load_tcalendar_list(
     Returns:
         dict: trading calendar.
     """
+    from pit.exceptions import CalendarMissingError
     cfg = read_config()
     if not os.path.exists(cfg.tcalendar_path):
-        raise FileNotFoundError(f"File not found: {cfg.tcalendar_path}, please update_calendar first.")
+        raise CalendarMissingError(f"Calendar {cfg.tcalendar_path} is missing")
     tc = pl.read_csv(cfg.tcalendar_path).get_column('date').to_list()
     
     _begin = any2ymd(begin) if begin else '1990-01-01'
