@@ -8,4 +8,4 @@ clean:
 	rm -rf build dist
 
 pull_build_install:
-	git pull origin dev && make build && pip install --no-deps --force-reinstall dist/*.whl
+	git pull origin dev && poetry build && pip install --no-deps --force-reinstall dist/*.whl
