@@ -491,7 +491,7 @@ def load_tcalendar_list(
     cfg = read_config()
     if not os.path.exists(cfg.tcalendar_path):
         raise FileNotFoundError(f"File not found: {cfg.tcalendar_path}, please update_calendar first.")
-    tc = pl.read_csv(cfg.calendar_path).get_column('date').to_list()
+    tc = pl.read_csv(cfg.tcalendar_path).get_column('date').to_list()
     
     _begin = any2ymd(begin) if begin else '1990-01-01'
     _end = any2ymd(end) if end else any2ymd(last_day_of_year())

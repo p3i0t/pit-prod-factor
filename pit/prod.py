@@ -1525,7 +1525,6 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     if prod not in prod_available:
         raise ValueError(f"prod {prod} not available, "
                          f"available prods: {prod_available}")
-    import pickle
     from pathlib import Path
 
     # prod_cfg = OmegaConf.load(os.path.join(script_dir, f'pred/{prod}.yaml'))
