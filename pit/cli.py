@@ -476,7 +476,7 @@ def update_tcalendar(verbose):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default=click.Choice(list_prods()), help="product to infer"
+    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
 )
 @click.option(
     "--milestone",
@@ -494,7 +494,7 @@ def train_single(prod, milestone):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default=click.Choice(list_prods()), help="product to infer"
+    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
 )
 @click.option(
     "--mode",
@@ -511,12 +511,14 @@ def show(prod, mode):
         args = get_inference_config(prod=prod)
     else:
         raise ValueError(f"mode {mode} not in ['train', 'inference']")
-    print(args)
+    from dataclasses import asdict
+    args_cfg = OmegaConf.create(asdict(args))
+    click.echo(OmegaConf.to_yaml(args_cfg))
 
 
 @click.command()
 @click.option(
-    "--prod", "-p", default=click.Choice(list_prods()), help="product to infer"
+    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
 )
 @click.option(
     "--date", "-d", default="today", help="the date of data used for inference."
@@ -572,7 +574,7 @@ def infer_online(prod, date, verbose):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default=click.Choice(list_prods()), help="product to infer"
+    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
 )
 @click.option(
     "--begin",
