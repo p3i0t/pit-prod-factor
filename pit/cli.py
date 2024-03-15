@@ -54,7 +54,7 @@ class ExtendedDate(click.ParamType):
 # Instantiate the custom type to use with the click option
 DateType = ExtendedDate()
 
-cfg = read_config()
+# cfg = read_config()
 
 @click.command()
 @click.option(
@@ -109,6 +109,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
             f"Targeted {len(trading_dates)} tasks from {trading_dates[0]} to {trading_dates[-1]}."
         )
 
+    cfg = read_config()
     item = "bar_1m"
     item_dir = cfg.raw.bar_1m.dir
 
@@ -214,6 +215,7 @@ def download(begin, end, task_name, verbose):
     trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
     trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
 
+    cfg = read_config()
     item = task_name
     item_dir = _dir.joinpath(item)
     item_dir.mkdir(parents=True, exist_ok=True)
