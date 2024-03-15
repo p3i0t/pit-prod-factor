@@ -5,8 +5,9 @@ import datetime
 import os
 import polars as pl
 from pit.utils import any2ymd, Datetime
+from pit.config import read_config
 
-__all__ = ['get_trading_slots', "is_trading_day", "get_tcalendar_df", "adjust_date"]
+__all__ = ['get_trading_slots', "is_trading_day", "get_tcalendar_df", "adjust_date", "adjust_tcalendar_slot_df"]
 
 # A-share minute trading slots, bar on the right
 trading_slots_right = ['1031',
@@ -452,6 +453,11 @@ def _parse_dhm(dhm: str) -> Tuple[int, int]:
     _d, _m = divmod(total_minutes, 1440)
     return _d, _m
 
+def last_day_of_year(year: Optional[int] = None) -> datetime.date:
+    if year is None:
+        year = datetime.datetime.now().year
+    return datetime.date(year, 12, 31)
+
 
 def compute_gap_days_and_end_slot(slot: str, duration: str) -> Tuple[int, str]:
     """compute the end time given start time and duration.
@@ -473,18 +479,28 @@ def compute_gap_days_and_end_slot(slot: str, duration: str) -> Tuple[int, str]:
     return n_days, end
     
 
-def _load_tcalendar() -> list[str]:
+def load_tcalendar_list(
+    begin: Optional[Datetime] = None, 
+    end: Optional[Datetime] = None
+) -> list[str]:
     """Load trading calendar from file.
 
     Returns:
         dict: trading calendar.
     """
-    pit_dir = os.path.join(
-        os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
+    cfg = read_config()
+    if not os.path.exists(cfg.tcalendar_path):
+        raise FileNotFoundError(f"File not found: {cfg.tcalendar_path}, please update_calendar first.")
+    tc = pl.read_csv(cfg.calendar_path).get_column('date').to_list()
     
-    calendar_path = f"{pit_dir}/tcalendar.csv"
-    return pl.read_csv(calendar_path).get_column('date').to_list()
-
+    _begin = any2ymd(begin) if begin else '1990-01-01'
+    _end = any2ymd(end) if end else any2ymd(last_day_of_year())
+    import bisect
+    ll = bisect.bisect_left(tc, _begin)
+    rr = bisect.bisect_right(tc, _end)
+    tc = tc[ll:rr]
+    return tc
+    
 
 def is_trading_day(date: Datetime) -> bool:
     """Check if a date is a trading day.
@@ -495,7 +511,7 @@ def is_trading_day(date: Datetime) -> bool:
     Returns:
         bool: True if it is a trading day.
     """
-    tc = _load_tcalendar()
+    tc = load_tcalendar_list()
     _date = any2ymd(date)
     index = bisect.bisect_left(tc, _date)
     if index != len(tc) and tc[index] == _date:
@@ -503,7 +519,7 @@ def is_trading_day(date: Datetime) -> bool:
     return False 
 
 
-def get_tcalendar_df(n_next: int) -> pl.DataFrame:
+def get_tcalendar_df(n_next: int = 1) -> pl.DataFrame:
     """Get trading calendar dataframe.
 
     Args:
@@ -512,7 +528,7 @@ def get_tcalendar_df(n_next: int) -> pl.DataFrame:
     Returns:
         pl.DataFrame: trading calendar dataframe.
     """
-    tcalendar = _load_tcalendar()
+    tcalendar = load_tcalendar_list()
     df = pl.DataFrame({'date': tcalendar})
     df = df.with_columns(
         pl.col('date').cast(pl.Date),
@@ -534,7 +550,7 @@ def adjust_date(date: Datetime, n_shift: int) -> datetime.date:
     if n_shift == 0:
         raise ValueError("n_shift should not be 0, which is pointless.")
     _date = any2ymd(date)
-    tcalendar_list = _load_tcalendar()
+    tcalendar_list = load_tcalendar_list()
     ii = bisect.bisect_left(tcalendar_list, _date)
     if tcalendar_list[ii] != _date and n_shift > 0:
         n_shift -= 1
