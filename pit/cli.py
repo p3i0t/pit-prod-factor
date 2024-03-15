@@ -1019,6 +1019,8 @@ def infer_hist(prod, begin, end, verbose):
 
 @click.command()
 def init():
+    """initialize and generate the config.yml.
+    """
     from pit.config import init_config
     home_dir = init_config()
     click.echo(f'Initialize config as {home_dir}')
@@ -1026,8 +1028,10 @@ def init():
     
 @click.command()
 def show_config():
+    """print the configurations in the current config file. 
+    """
     cfg = read_config()
-    click.echo(cfg)
+    click.echo(OmegaConf.to_yaml(cfg))
 
 
 @click.group()
