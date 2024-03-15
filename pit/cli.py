@@ -24,15 +24,20 @@ from pit.download import (
     download_lag_return,
 )
 from pit.config import read_config
-from pit.tcalendar import is_trading_day, adjust_date, get_tcalendar_df, load_tcalendar_list
+from pit.tcalendar import (
+    is_trading_day,
+    adjust_date,
+    get_tcalendar_df,
+    load_tcalendar_list,
+)
 
 
 tasks_dict = {
     "ohlcv_1m": download_ohlcv_minute,
     "univ": download_universe,
     "return": download_return,
-    'lag_return': download_lag_return,
-    'bar_1m': download_stock_minute
+    "lag_return": download_lag_return,
+    "bar_1m": download_stock_minute,
 }
 
 
@@ -40,6 +45,7 @@ tasks_dict = {
 # to convert the value (as str) to the desired type (date str)
 class ExtendedDate(click.ParamType):
     name = "date"
+
     def convert(self, value, param, ctx):
         try:
             return any2ymd(str(value))
@@ -70,6 +76,7 @@ DateType = ExtendedDate()
 def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     """Download 1min bars up to today."""
     import ray
+
     if is_trading_day(begin):
         _begin = any2date(begin)
     else:
@@ -173,7 +180,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     "-t",
     "task_name",
     default="ohlcv_1m",
-    type=click.Choice(['return', 'lag_return', 'ohlcv_1m', 'univ']),
+    type=click.Choice(["return", "lag_return", "ohlcv_1m", "univ"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 def download(begin, end, task_name, verbose):
@@ -208,7 +215,7 @@ def download(begin, end, task_name, verbose):
 
     cfg = read_config()
     item = task_name
-    item_dir = cfg.raw[item]['dir']
+    item_dir = cfg.raw[item]["dir"]
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
@@ -269,7 +276,6 @@ def long2widev2(n_jobs, n_cpu, verbose):
         if verbose is True:
             click.echo(f"running on {date}")
         df = pl.scan_parquet(f"{src_dir}/{date}.parq")
-        # cols = [c for c in df.columns if c not in ["date", "symbol", "time"]]
         cols = get_bars("v2")
         df = df.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
         df = df.with_columns([pl.col(_c).cast(pl.Float32) for _c in cols]).collect()
@@ -312,6 +318,7 @@ def long2widev2(n_jobs, n_cpu, verbose):
 def downsample10(n_jobs, n_cpu, verbose):
     """Downsample 1m to 10m."""
     import glob
+
     cfg = read_config()
     src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
     tgt_dir = Path(cfg.derived_dir).joinpath("bar_10m")
@@ -476,7 +483,11 @@ def update_tcalendar(verbose):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
+    "--prod",
+    "-p",
+    default="1030",
+    type=click.Choice(list_prods()),
+    help="product name.",
 )
 @click.option(
     "--milestone",
@@ -494,7 +505,11 @@ def train_single(prod, milestone):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
+    "--prod",
+    "-p",
+    default="1030",
+    type=click.Choice(list_prods()),
+    help="product name.",
 )
 @click.option(
     "--mode",
@@ -514,17 +529,18 @@ def show(prod, mode):
     click.echo(args.model_dump())
 
 
-
 @click.command()
 @click.option(
-    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
+    "--prod",
+    "-p",
+    default="1030",
+    type=click.Choice(list_prods()),
+    help="product name.",
 )
 @click.option(
     "--date", "-d", default="today", help="the date of data used for inference."
 )
-@click.option(
-    "--verbose", "-v", is_flag=True, help="whether to print more information."
-)
+@click.option("--verbose", "-v", is_flag=True, help="print more information.")
 def infer_online(prod, date, verbose):
     """Online inference on single date.
 
@@ -573,7 +589,11 @@ def infer_online(prod, date, verbose):
 
 @click.command()
 @click.option(
-    "--prod", "-p", default='1030', type=click.Choice(list_prods()), help="product name."
+    "--prod",
+    "-p",
+    default="1030",
+    type=click.Choice(list_prods()),
+    help="product name.",
 )
 @click.option(
     "--begin",
@@ -587,9 +607,7 @@ def infer_online(prod, date, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option(
-    "--verbose", is_flag=True, help="print more information when debug is True."
-)
+@click.option("--verbose", is_flag=True, help="print more information.")
 def infer_hist(prod, begin, end, verbose):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -605,7 +623,9 @@ def infer_hist(prod, begin, end, verbose):
     )
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
-        date_lag = get_tcalendar_df(n_next=1).filter((pl.col('date') >= begin) & (pl.col('date') <= end))
+        date_lag = get_tcalendar_df(n_next=1).filter(
+            (pl.col("date") >= begin) & (pl.col("date") <= end)
+        )
         date_lag = date_lag.with_columns(
             pl.col(c).cast(pl.Date) for c in ["date", "next", "prev"]
         )
@@ -638,17 +658,16 @@ def infer_hist(prod, begin, end, verbose):
 
 @click.command()
 def init():
-    """Initialize and generate the config.yml.
-    """
+    """Initialize and generate the config.yml."""
     from pit.config import init_config
-    home_dir = init_config()
-    click.echo(f'Initialize config as {home_dir}')
 
-    
+    home_dir = init_config()
+    click.echo(f"Initialize config as {home_dir}")
+
+
 @click.command()
 def show_config():
-    """Print the configurations in the current config file. 
-    """
+    """Print the configurations in the current config file."""
     cfg = read_config()
     click.echo(OmegaConf.to_yaml(cfg))
 
