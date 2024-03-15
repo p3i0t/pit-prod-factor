@@ -8,4 +8,4 @@ clean:
 	rm -rf build dist
 
 pull_build_install:
-	git pull origina dev && make build && pip install dist/*.whl
+	git pull origin dev && make build && pip install dist/*.whl
