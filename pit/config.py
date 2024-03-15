@@ -49,10 +49,19 @@ def init_config() -> str:
             # all the derived data items
             'derived': {
                 'bar_10m': {
-                    'dir': '${derived.dir}/bar_10m',
+                    'dir': '${derived_dir}/bar_10m',
                 },
             },
+            'dataset_dir': '${pit_dir}/dataset',
+            'dataset': {
+                '10m_v2': {
+                    'dir': '${dataset_dir}/10m_v2',
+                }
+            },
+            'save_dir': '${pit_dir}/runs',
+            'infer_dir': '${pit_dir}/infer',
         }
+        
         cfg = OmegaConf.create(default_config)
         OmegaConf.save(cfg, CONFIG_PATH)
     return PIT_DIR
