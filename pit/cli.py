@@ -467,11 +467,11 @@ def update_tcalendar(verbose):
     cfg = read_config()
     tclendar_series = download_tcalendar()
     if verbose:
-        click.echo(f"Updating calendar to {cfg.calendar_path}")
+        click.echo(f"Updating calendar to {cfg.tcalendar_path}")
         click.echo(
             f"{len(tclendar_series)} dates from {tclendar_series[0]} to {tclendar_series[-1]}."
         )
-    tclendar_series.to_frame().write_csv(cfg.calendar_path)
+    tclendar_series.to_frame().write_csv(cfg.tcalendar_path)
 
 
 @click.command()
