@@ -5,7 +5,7 @@ PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
 CONFIG_PATH = os.path.join(PIT_DIR, "config.yml")
 
 # Register a new resolver named "mkdir"
-# OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
+OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
 
 # In the example's configuration setup, you didn't directly see a resolver being called like ${mkdir:...} within the YAML file.
 # Instead, the directory creation was invoked programmatically during runtime:
@@ -19,53 +19,46 @@ CONFIG_PATH = os.path.join(PIT_DIR, "config.yml")
 
 def init_config() -> str:
     os.makedirs(PIT_DIR, exist_ok=True)
-    OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
     if not os.path.exists(CONFIG_PATH):
         default_config = {
             "pit_dir": PIT_DIR,
             "tcalendar_path": "${pit_dir}/tcalendar.csv",
-            "raw_dir": "${pit_dir}/raw",
             # all the raw data items
             "raw": {
-                "bar_1m": {
-                    "dir": "${raw_dir}/bar_1m",
-                },
-                "univ": {
-                    "dir": "${raw_dir}/univ",
-                },
-                "barra": {
-                    "dir": "${raw_dir}/barra",
-                },
-                "ohlcv_1m": {
-                    "dir": "${raw_dir}/ohlcv_1m",
-                },
-                "return": {
-                    "dir": "${raw_dir}/return",
-                },
-                "lag_return": {
-                    "dir": "${raw_dir}/lag_return",
-                },
+                "dir": "${pit_dir}/raw", 
+                "items": ["bar_1m", "univ", "barra", "ohlcv_1m", "return", "lag_return"],
             },
-            "derived_dir": "${pit_dir}/derived",
             # all the derived data items
             "derived": {
-                "bar_10m": {
-                    "dir": "${derived_dir}/bar_10m",
-                },
+                "dir": "${pit_dir}/derived",
+                "items": ["bar_10m"]
             },
-            "dataset_dir": "${pit_dir}/dataset",
             "dataset": {
-                "10m_v2": {
-                    "dir": "${dataset_dir}/10m_v2",
-                }
+                "dir": "${pit_dir}/dataset",
+                "items": ["10m_v2"],
             },
             "save_dir": "${pit_dir}/runs",
             "infer_dir": "${pit_dir}/infer",
         }
 
         cfg = OmegaConf.create(default_config)
-        OmegaConf.resolve(cfg)
         OmegaConf.save(cfg, CONFIG_PATH)
+        
+        # create all directories
+        OmegaConf.resolve(cfg)
+        from pathlib import Path
+        Path(cfg.raw.dir).mkdir(parents=True, exist_ok=True)
+        for item in cfg.raw.items:
+            Path(f"{cfg.raw.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
+        Path(cfg.derived.dir).mkdir(parents=True, exist_ok=True)
+        for item in cfg.derived.items:
+            Path(f"{cfg.derived.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
+        Path(cfg.dataset.dir).mkdir(parents=True, exist_ok=True)
+        for item in cfg.dataset.items:
+            Path(f"{cfg.dataset.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
+        Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
+        Path(cfg.infer_dir).mkdir(parents=True, exist_ok=True)
+
     return PIT_DIR
 
 
