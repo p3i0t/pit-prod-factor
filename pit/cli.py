@@ -7,16 +7,6 @@ from loguru import logger
 from omegaconf import OmegaConf
 import polars as pl
 
-try:
-    import datareader as dr
-except ImportError:
-    raise ImportError("Error: module datareader not found.")
-
-try:
-    import genutils as gu
-except ImportError:
-    raise ImportError("Error: module genutils not found.")
-
 from pit import (
     list_prods,
     get_bars,
@@ -30,20 +20,26 @@ from pit.download import (
     download_universe,
     download_ohlcv_minute,
     download_tcalendar,
+    download_return,
+    download_lag_return,
 )
 from pit.config import read_config
+from pit.tcalendar import is_trading_day, adjust_date, get_tcalendar_df, load_tcalendar_list
 
 
 tasks_dict = {
     "ohlcv_1m": download_ohlcv_minute,
     "univ": download_universe,
+    "return": download_return,
+    'lag_return': download_lag_return,
+    'bar_1m': download_stock_minute
 }
+
 
 # self-defined click ParamType by overriding the convert() method
 # to convert the value (as str) to the desired type (date str)
 class ExtendedDate(click.ParamType):
     name = "date"
-
     def convert(self, value, param, ctx):
         try:
             return any2ymd(str(value))
@@ -54,7 +50,6 @@ class ExtendedDate(click.ParamType):
 # Instantiate the custom type to use with the click option
 DateType = ExtendedDate()
 
-# cfg = read_config()
 
 @click.command()
 @click.option(
@@ -75,21 +70,21 @@ DateType = ExtendedDate()
 def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     """Download 1min bars up to today."""
     import ray
-    if gu.tcalendar.trading(begin):
+    if is_trading_day(begin):
         _begin = any2date(begin)
     else:
-        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        _begin: datetime.date = adjust_date(begin, 1)
         if verbose is True:
             click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
 
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+    if is_trading_day(end) and datetime.datetime.now().strftime("%H%M") > "2300":
         _end = any2date(end)
         if verbose is True:
             click.echo(
                 f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
             )
     else:
-        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        _end: datetime.date = adjust_date(end, -1)
         if verbose is True:
             click.echo(f"end date {end} is not trading day, adjust to {_end}")
 
@@ -101,9 +96,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
         )
         return
 
-    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
-    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
-
+    trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
     if verbose is True:
         click.echo(
             f"Targeted {len(trading_dates)} tasks from {trading_dates[0]} to {trading_dates[-1]}."
@@ -141,7 +134,6 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
                 click.echo(f"task {d:%Y-%m-%d} done.")
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
             res_list.append(d)
-        # return df
 
     task_ids = []
     n_task_finished = 0
@@ -181,26 +173,26 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     "-t",
     "task_name",
     default="ohlcv_1m",
-    type=click.Choice(list(tasks_dict.keys())),
+    type=click.Choice(['return', 'lag_return', 'ohlcv_1m', 'univ']),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 def download(begin, end, task_name, verbose):
     """Daily Download Tasks."""
-    if gu.tcalendar.trading(begin):
+    if is_trading_day(begin):
         _begin = any2date(begin)
     else:
-        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
+        _begin: datetime.date = adjust_date(begin, 1)
         if verbose is True:
             click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
 
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+    if is_trading_day(end) and datetime.datetime.now().strftime("%H%M") > "2300":
         _end = any2date(end)
         if verbose is True:
             click.echo(
                 f"end date {end} is trading day and data is available at now (after 2330), adjust to {_end}"
             )
     else:
-        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
+        _end: datetime.date = adjust_date(end, -1)
         if verbose is True:
             click.echo(f"end date {end} adjust to {_end}")
 
@@ -212,12 +204,11 @@ def download(begin, end, task_name, verbose):
         )
         return
 
-    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
-    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
+    trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
 
     cfg = read_config()
     item = task_name
-    item_dir = _dir.joinpath(item)
+    item_dir = cfg.raw[item]['dir']
     item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
@@ -240,375 +231,6 @@ def download(begin, end, task_name, verbose):
         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
     click.echo(f"task {task_name} done.")
-
-
-@click.command()
-@click.option(
-    "--begin",
-    default="2017-01-01",
-    type=DateType,
-    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
-)
-@click.option(
-    "--end",
-    default="today",
-    type=DateType,
-    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
-)
-@click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
-def download_return(begin, end, verbose):
-    """Download return."""
-    cfg = read_config()
-    _dir = Path(cfg.raw.dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-
-    if gu.tcalendar.trading(begin):
-        _begin = any2date(begin)
-    else:
-        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
-        if verbose is True:
-            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
-
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
-        _end = any2date(end)
-        if verbose is True:
-            click.echo(
-                f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
-            )
-    else:
-        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
-        if verbose is True:
-            click.echo(f"end date {end} is not trading day, adjust to {_end}")
-
-    if _begin <= _end:
-        pass
-    else:
-        click.echo(
-            f"begin date {_begin} is later than end date {_end}, no need to download."
-        )
-        return
-
-    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
-    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
-
-    item = "return"
-    item_dir = _dir.joinpath(item)
-    item_dir.mkdir(parents=True, exist_ok=True)
-
-    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    # trading_dates = sorted(set(trading_dates) - set(existing_dates))
-    recent_dates = sorted(
-        gu.tcalendar.get(begin=gu.tcalendar.adjust("today", -6), end="today")
-    )
-    left_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
-
-    if len(left_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
-        return
-    if verbose is True:
-        click.echo(f"Download {item} to directory={item_dir}")
-        click.echo(f"{len(trading_dates)} dates in total")
-        click.echo(f"{len(existing_dates)} dates already exist.")
-        click.echo(f"{len(left_dates)} dates to be done.")
-
-    n_list = [1, 2, 3, 5]
-
-    # delay 5 minutes
-    slots = [
-        ("0935", "1000"),
-        (1005, 1030),
-        (1035, 1100),
-        (1105, 1130),
-        (1305, 1330),
-        (1335, 1400),
-        (1405, 1430),
-        (1435, 1500),
-    ]
-    ret_slots = {}
-    # vwap return
-    for slot in slots:
-        ret_slots[f"_v2v_{slot[0]}"] = (
-            f"vwap_{slot[0]}_{slot[1]}",
-            f"vwap_{slot[0]}_{slot[1]}",
-        )
-    # open-to-open return
-    for slot in slots:
-        ret_slots[f"_o2o_{slot[0]}"] = (f"close_{slot[0]}", f"close_{slot[0]}")
-
-    df: pl.DataFrame = dr.read(
-        dr.m.StockReturnDaily(ret_slots, n_days=n_list, abbr=False, future=True),
-        begin=begin,
-        end=end,
-        df_lib="polars",
-    )
-
-    # get intraday returns
-    slots = [
-        "0935",
-        "1005",
-        "1035",
-        "1105",
-        "1305",
-        "1335",
-        "1405",
-        "1435",
-        "1000",
-        "1030",
-        "1100",
-        "1130",
-        "1330",
-        "1400",
-        "1430",
-        "1500",
-    ]
-    df_close: pl.DataFrame = dr.read(
-        dr.m.StockMinute(["close"]),
-        begin=begin,
-        end=end,
-        at=slots,
-        df_lib="polars",
-    )
-    df_close = df_close.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
-    # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
-
-    df_intra = df_close.pivot(values="close", columns="slot", index=["date", "symbol"])
-    df_intra = df_intra.with_columns(
-        pl.col("1000").truediv(pl.col("0935")).sub(1).alias("0930_30m"),
-        pl.col("1030").truediv(pl.col("1005")).sub(1).alias("1000_30m"),
-        pl.col("1100").truediv(pl.col("1035")).sub(1).alias("1030_30m"),
-        pl.col("1130").truediv(pl.col("1105")).sub(1).alias("1100_30m"),
-        pl.col("1330").truediv(pl.col("1305")).sub(1).alias("1300_30m"),
-        pl.col("1400").truediv(pl.col("1335")).sub(1).alias("1330_30m"),
-        pl.col("1430").truediv(pl.col("1405")).sub(1).alias("1400_30m"),
-        pl.col("1500").truediv(pl.col("1435")).sub(1).alias("1430_30m"),
-        pl.col("1030").truediv(pl.col("0935")).sub(1).alias("0930_1h"),
-        pl.col("1100").truediv(pl.col("1005")).sub(1).alias("1000_1h"),
-        pl.col("1130").truediv(pl.col("1035")).sub(1).alias("1030_1h"),
-        pl.col("1330").truediv(pl.col("1105")).sub(1).alias("1100_1h"),
-        pl.col("1400").truediv(pl.col("1305")).sub(1).alias("1300_1h"),
-        pl.col("1430").truediv(pl.col("1335")).sub(1).alias("1330_1h"),
-        pl.col("1500").truediv(pl.col("1405")).sub(1).alias("1400_1h"),
-    )
-
-    intra_return_cols = [
-        "0930_30m",
-        "1000_30m",
-        "1030_30m",
-        "1100_30m",
-        "1300_30m",
-        "1330_30m",
-        "1400_30m",
-        "1430_30m",
-        "0930_1h",
-        "1000_1h",
-        "1030_1h",
-        "1100_1h",
-        "1300_1h",
-        "1330_1h",
-        "1400_1h",
-    ]
-
-    df = df.join(
-        df_intra.select(intra_return_cols + ["date", "symbol"]),
-        on=["date", "symbol"],
-        how="left",
-    ).sort(by=["date", "symbol"])
-
-    for d, _df in df.partition_by(["date"], as_dict=True).items():
-        # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    click.echo(f"task {item} done.")
-
-
-@click.command()
-@click.option(
-    "--begin",
-    default="2017-01-01",
-    type=DateType,
-    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
-)
-@click.option(
-    "--end",
-    default="today",
-    type=DateType,
-    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
-)
-@click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
-def download_lag_return(dir, begin, end, verbose):
-    """Download lag return."""
-    # from datetime import datetime, timedelta
-    cfg = read_config()
-    _dir = Path(cfg.raw.dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-
-    if gu.tcalendar.trading(begin):
-        _begin = any2date(begin)
-    else:
-        _begin: datetime.date = gu.tcalendar.adjust(begin, 1).date()
-        if verbose is True:
-            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
-
-    if gu.tcalendar.trading(end) and datetime.datetime.now().strftime("%H%M") > "2300":
-        _end = any2date(end)
-        if verbose is True:
-            click.echo(
-                f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
-            )
-    else:
-        _end: datetime.date = gu.tcalendar.adjust(end, -1).date()
-        if verbose is True:
-            click.echo(f"end date {end} is not trading day, adjust to {_end}")
-
-    if _begin <= _end:
-        pass
-    else:
-        click.echo(
-            f"begin date {_begin} is later than end date {_end}, no need to download."
-        )
-        return
-
-    trading_dates = sorted(gu.tcalendar.get(begin=begin, end=_end))
-    trading_dates = [d.strftime("%Y-%m-%d") for d in trading_dates]
-
-    item = "return"
-    item_dir = _dir.joinpath(item)
-    item_dir.mkdir(parents=True, exist_ok=True)
-
-    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
-    # trading_dates = sorted(set(trading_dates) - set(existing_dates))
-    recent_dates = sorted(
-        gu.tcalendar.get(begin=gu.tcalendar.adjust("today", -6), end="today")
-    )
-    left_dates = sorted(set(trading_dates) - set(existing_dates) - set(recent_dates))
-
-    if len(left_dates) == 0:
-        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
-        return
-    if verbose is True:
-        click.echo(f"Download {item} to directory={item_dir}")
-        click.echo(f"{len(trading_dates)} dates in total")
-        click.echo(f"{len(existing_dates)} dates already exist.")
-        click.echo(f"{len(left_dates)} dates to be done.")
-
-    n_list = [1, 2, 3, 5]
-
-    # delay 5 minutes
-    slots = [
-        ("0935", "1000"),
-        (1005, 1030),
-        (1035, 1100),
-        (1105, 1130),
-        (1305, 1330),
-        (1335, 1400),
-        (1405, 1430),
-        (1435, 1500),
-    ]
-    ret_slots = {}
-    # vwap return
-    for slot in slots:
-        ret_slots[f"_v2v_{slot[0]}"] = (
-            f"vwap_{slot[0]}_{slot[1]}",
-            f"vwap_{slot[0]}_{slot[1]}",
-        )
-    # open-to-open return
-    for slot in slots:
-        ret_slots[f"_o2o_{slot[0]}"] = (f"close_{slot[0]}", f"close_{slot[0]}")
-
-    df: pl.DataFrame = dr.read(
-        dr.m.StockReturnDaily(ret_slots, n_days=n_list, abbr=False, future=True),
-        begin=begin,
-        end=end,
-        df_lib="polars",
-    )
-
-    # get intraday returns
-    slots = [
-        "0935",
-        "1005",
-        "1035",
-        "1105",
-        "1305",
-        "1335",
-        "1405",
-        "1435",
-        "1000",
-        "1030",
-        "1100",
-        "1130",
-        "1330",
-        "1400",
-        "1430",
-        "1500",
-    ]
-    df_close: pl.DataFrame = dr.read(
-        dr.m.StockMinute(["close"]),
-        begin=begin,
-        end=end,
-        at=slots,
-        df_lib="polars",
-    )
-    df_close = df_close.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
-    # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
-
-    df_intra = df_close.pivot(values="close", columns="slot", index=["date", "symbol"])
-    df_intra = df_intra.with_columns(
-        pl.col("1000").truediv(pl.col("0935")).sub(1).alias("0930_30m"),
-        pl.col("1030").truediv(pl.col("1005")).sub(1).alias("1000_30m"),
-        pl.col("1100").truediv(pl.col("1035")).sub(1).alias("1030_30m"),
-        pl.col("1130").truediv(pl.col("1105")).sub(1).alias("1100_30m"),
-        pl.col("1330").truediv(pl.col("1305")).sub(1).alias("1300_30m"),
-        pl.col("1400").truediv(pl.col("1335")).sub(1).alias("1330_30m"),
-        pl.col("1430").truediv(pl.col("1405")).sub(1).alias("1400_30m"),
-        pl.col("1500").truediv(pl.col("1435")).sub(1).alias("1430_30m"),
-        pl.col("1030").truediv(pl.col("0935")).sub(1).alias("0930_1h"),
-        pl.col("1100").truediv(pl.col("1005")).sub(1).alias("1000_1h"),
-        pl.col("1130").truediv(pl.col("1035")).sub(1).alias("1030_1h"),
-        pl.col("1330").truediv(pl.col("1105")).sub(1).alias("1100_1h"),
-        pl.col("1400").truediv(pl.col("1305")).sub(1).alias("1300_1h"),
-        pl.col("1430").truediv(pl.col("1335")).sub(1).alias("1330_1h"),
-        pl.col("1500").truediv(pl.col("1405")).sub(1).alias("1400_1h"),
-    )
-
-    intra_return_cols = [
-        "0930_30m",
-        "1000_30m",
-        "1030_30m",
-        "1100_30m",
-        "1300_30m",
-        "1330_30m",
-        "1400_30m",
-        "1430_30m",
-        "0930_1h",
-        "1000_1h",
-        "1030_1h",
-        "1100_1h",
-        "1300_1h",
-        "1330_1h",
-        "1400_1h",
-    ]
-
-    df = df.join(
-        df_intra.select(intra_return_cols + ["date", "symbol"]),
-        on=["date", "symbol"],
-        how="left",
-    ).sort(by=["date", "symbol"])
-
-    cols = ["date", "prev", "next"]
-    date_lag = gu.tcalendar.getdf(begin=begin, end=end, renew=False)[cols]
-    date_lag = pl.from_dataframe(date_lag)
-    date_lag = date_lag.with_columns(pl.col(c).cast(pl.Date).alias(c) for c in cols)
-    df_lag = df.join(date_lag, on="date", how="left")
-    df_lag = df_lag.drop(["date", "next"])
-    df_lag = df_lag.rename({"prev": "date"})
-    cols_rename = {
-        col: f"lag_{col}" for col in df.columns if col not in ["date", "symbol"]
-    }
-    df_lag = df_lag.rename(mapping=cols_rename)
-
-    for d, _df in df_lag.partition_by(["date"], as_dict=True).items():
-        # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-    click.echo(f"task {item} done.")
 
 
 @click.command()
@@ -914,8 +536,8 @@ def infer_online(prod, date, verbose):
     infer_date = any2date(date)
     args = get_inference_config(prod=prod)
 
-    if len(gu.tcalendar.get(infer_date, infer_date)) == 0:
-        print(f"generate date {infer_date} is not a trading date !!!")
+    if not is_trading_day(infer_date):
+        click.echo(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
 
     o = infer(
@@ -923,7 +545,7 @@ def infer_online(prod, date, verbose):
     )
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
-        next_date = gu.tcalendar.adjust(infer_date, 1).date()
+        next_date = adjust_date(infer_date, 1)
         # replace date with next_date
         o = o.with_columns(pl.lit(next_date).cast(pl.Date).alias("date"))
 
@@ -936,8 +558,8 @@ def infer_online(prod, date, verbose):
         .alias("time")
     )
 
-    pit_dir = os.path.join(os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFER_DIR)
+    cfg = read_config()
+    infer_dir = Path(cfg.infer_dir)
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -982,8 +604,7 @@ def infer_hist(prod, begin, end, verbose):
     )
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
-        date_lag = gu.tcalendar.getdf(begin, end)
-        date_lag = pl.from_pandas(date_lag)
+        date_lag = get_tcalendar_df(n_next=1).filter((pl.col('date') >= begin) & (pl.col('date') <= end))
         date_lag = date_lag.with_columns(
             pl.col(c).cast(pl.Date) for c in ["date", "next", "prev"]
         )
@@ -999,16 +620,13 @@ def infer_hist(prod, begin, end, verbose):
         .add(timedelta(hours=int(slot[:2]), minutes=int(slot[2:])))
         .alias("time")
     )
-
-    pit_dir = os.path.join(os.getenv("PIT_HOME", os.path.expanduser("~")), ".pit")
-    infer_dir = Path(OmegaConf.load(open(f"{pit_dir}/config.yml")).INFER_DIR)
+    cfg = read_config()
+    infer_dir = Path(cfg.infer_dir)
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
 
-    use_begin = (
-        gu.tcalendar.adjust(begin, 1).date() if prod in ["0930", "0930_1h"] else begin
-    )
-    use_end = gu.tcalendar.adjust(end, 1).date() if prod in ["0930", "0930_1h"] else end
+    use_begin = adjust_date(begin, 1) if prod in ["0930", "0930_1h"] else begin
+    use_end = adjust_date(end, 1) if prod in ["0930", "0930_1h"] else end
 
     o.write_parquet(tgt_dir.joinpath(f"hist_pred_{use_begin}_{use_end}.parq"))
     alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
@@ -1019,7 +637,7 @@ def infer_hist(prod, begin, end, verbose):
 
 @click.command()
 def init():
-    """initialize and generate the config.yml.
+    """Initialize and generate the config.yml.
     """
     from pit.config import init_config
     home_dir = init_config()
@@ -1028,7 +646,7 @@ def init():
     
 @click.command()
 def show_config():
-    """print the configurations in the current config file. 
+    """Print the configurations in the current config file. 
     """
     cfg = read_config()
     click.echo(OmegaConf.to_yaml(cfg))
@@ -1044,8 +662,6 @@ pit.add_command(train_single)
 pit.add_command(show)
 pit.add_command(download)
 pit.add_command(download_1m)
-pit.add_command(download_return)
-pit.add_command(download_lag_return)
 pit.add_command(long2widev2)
 pit.add_command(downsample10)
 pit.add_command(merge10_v2)
