@@ -5,7 +5,7 @@ PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
 CONFIG_PATH = os.path.join(PIT_DIR, "config.yml")
 
 # Register a new resolver named "mkdir"
-OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
+# OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
 
 # In the example's configuration setup, you didn't directly see a resolver being called like ${mkdir:...} within the YAML file.
 # Instead, the directory creation was invoked programmatically during runtime:
@@ -19,6 +19,7 @@ OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True)
 
 def init_config() -> str:
     os.makedirs(PIT_DIR, exist_ok=True)
+    OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
     if not os.path.exists(CONFIG_PATH):
         default_config = {
             "pit_dir": PIT_DIR,
@@ -63,6 +64,7 @@ def init_config() -> str:
         }
 
         cfg = OmegaConf.create(default_config)
+        OmegaConf.resolve(cfg)
         OmegaConf.save(cfg, CONFIG_PATH)
     return PIT_DIR
 
