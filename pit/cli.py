@@ -511,9 +511,8 @@ def show(prod, mode):
         args = get_inference_config(prod=prod)
     else:
         raise ValueError(f"mode {mode} not in ['train', 'inference']")
-    from dataclasses import asdict
-    args_cfg = OmegaConf.create(asdict(args))
-    click.echo(OmegaConf.to_yaml(args_cfg))
+    click.echo(args.model_dump())
+
 
 
 @click.command()
