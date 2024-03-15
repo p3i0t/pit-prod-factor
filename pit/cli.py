@@ -35,10 +35,9 @@ from pit.config import read_config
 
 
 tasks_dict = {
-    "ohlcv_minute": download_ohlcv_minute,
+    "ohlcv_1m": download_ohlcv_minute,
     "univ": download_universe,
 }
-
 
 # self-defined click ParamType by overriding the convert() method
 # to convert the value (as str) to the desired type (date str)
@@ -55,6 +54,7 @@ class ExtendedDate(click.ParamType):
 # Instantiate the custom type to use with the click option
 DateType = ExtendedDate()
 
+cfg = read_config()
 
 @click.command()
 @click.option(
@@ -75,11 +75,6 @@ DateType = ExtendedDate()
 def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     """Download 1min bars up to today."""
     import ray
-
-    cfg = read_config()
-    _dir = Path(cfg.raw_dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-
     if gu.tcalendar.trading(begin):
         _begin = any2date(begin)
     else:
@@ -100,7 +95,6 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
 
     if _begin <= _end:
         pass
-        # click.echo(f"Download 1min bars to directory={_dir}, from {_begin} to {_end}")
     else:
         click.echo(
             f"begin date {_begin} is later than end date {_end}, no need to download."
@@ -116,8 +110,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
         )
 
     item = "bar_1m"
-    item_dir = _dir.joinpath(item)
-    item_dir.mkdir(parents=True, exist_ok=True)
+    item_dir = cfg.raw.bar_1m.dir
 
     existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
     left_dates = sorted(set(trading_dates) - set(existing_dates))
@@ -186,16 +179,12 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     "--task",
     "-t",
     "task_name",
-    default="ohlcv_minute",
+    default="ohlcv_1m",
     type=click.Choice(list(tasks_dict.keys())),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 def download(begin, end, task_name, verbose):
     """Daily Download Tasks."""
-    cfg = read_config()
-    _dir = Path(cfg.raw_dir)
-    _dir.mkdir(parents=True, exist_ok=True)
-
     if gu.tcalendar.trading(begin):
         _begin = any2date(begin)
     else:
@@ -268,7 +257,7 @@ def download(begin, end, task_name, verbose):
 def download_return(begin, end, verbose):
     """Download return."""
     cfg = read_config()
-    _dir = Path(cfg.raw_dir)
+    _dir = Path(cfg.raw.dir)
     _dir.mkdir(parents=True, exist_ok=True)
 
     if gu.tcalendar.trading(begin):
@@ -447,7 +436,7 @@ def download_lag_return(dir, begin, end, verbose):
     """Download lag return."""
     # from datetime import datetime, timedelta
     cfg = read_config()
-    _dir = Path(cfg.raw_dir)
+    _dir = Path(cfg.raw.dir)
     _dir.mkdir(parents=True, exist_ok=True)
 
     if gu.tcalendar.trading(begin):
@@ -635,7 +624,7 @@ def long2widev2(n_jobs, n_cpu, verbose):
     import itertools
 
     cfg = read_config()
-    dir = Path(cfg.raw_dir)
+    dir = Path(cfg.raw.dir)
     src_dir = dir.joinpath("bar_1m")
     tgt_dir = dir.joinpath("bar_1m_wide_v2")
     if verbose is True:
@@ -700,7 +689,7 @@ def downsample10(n_jobs, n_cpu, verbose):
     """Downsample 1m to 10m."""
     import glob
     cfg = read_config()
-    src_dir = Path(cfg.raw_dir).joinpath("bar_1m")
+    src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
     tgt_dir = Path(cfg.derived_dir).joinpath("bar_10m")
     from pit.downsample import downsample_1m_to_10m
 
@@ -1025,21 +1014,24 @@ def infer_hist(prod, begin, end, verbose):
     )
     alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{use_begin}_{use_end}.parq"))
 
+
 @click.command()
 def init():
     from pit.config import init_config
     home_dir = init_config()
     click.echo(f'Initialize config as {home_dir}')
+
     
 @click.command()
 def show_config():
     cfg = read_config()
     click.echo(cfg)
 
+
 @click.group()
 def pit():
     """pit: Alpha Signals Generator of Pit."""
-    click.echo("Alpha Signals Generator of Pit.")
+    # click.echo("Alpha Signals Generator of Pit.")
 
 
 pit.add_command(train_single)

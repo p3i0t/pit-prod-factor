@@ -6,3 +6,6 @@ build:
 # 	rm -rf build && python setup_infer_only.py build_ext && python setup.py bdist_wheel
 clean:
 	rm -rf build dist
+
+pull_build_install:
+	git pull origina dev && make build && pip install dist/*.whl

@@ -4,36 +4,61 @@ from omegaconf import OmegaConf
 PIT_DIR = os.path.expanduser(os.getenv('PIT_DIR', '~/.pit'))
 CONFIG_PATH = os.path.join(PIT_DIR, 'config.yml')
     
+# Register a new resolver named "mkdir"
+OmegaConf.register_new_resolver("mkdir", lambda x: os.makedirs(x, exist_ok=True) or x)
+
+# In the example's configuration setup, you didn't directly see a resolver being called like ${mkdir:...} within the YAML file. 
+# Instead, the directory creation was invoked programmatically during runtime:
+
+# Trigger directory creation with side effects
+# OmegaConf.resolve(config)
+
+# This invocation of OmegaConf.resolve(config) goes through the configuration object and resolves any interpolations or resolver functions. 
+# If there were expressions like ${mkdir:/path/to/dir} directly in the configuration, they would get evaluated at this point—causing the directories to be created.
+
+
 def init_config() -> str:
     os.makedirs(PIT_DIR, exist_ok=True)
-    
     if not os.path.exists(CONFIG_PATH):
-        TCALENDAR_PATH = os.path.join(PIT_DIR, 'tcalendar.csv') # visible
-        RAW_DIR = os.path.join(PIT_DIR, 'raw')
-        DERIVED_DIR = os.path.join(PIT_DIR, 'derived')
-        
-        # raw_config = {
-        #     'bar_1m': os.path.join(RAW_DIR, 'bar_1m'),
-        #     'univ': os.path.join(RAW_DIR, 'univ'),
-        #     'barra': os.path.join(RAW_DIR, 'barra'),
-        #     'ohlcv_1m': os.path.join(RAW_DIR, 'ohlcv_1m'),
-        #     'return': os.path.join(RAW_DIR, 'return'),
-        #     'lag_return': os.path.join(RAW_DIR, 'lag_return'),
-        # }
-        # derived_config = {
-        #     'bar_10m': os.path.join(DERIVED_DIR, 'bar_10m'),
-        # }
         default_config = {
-            'tcalendar_path': TCALENDAR_PATH,
-            'raw_dir': RAW_DIR,
-            # 'raw': raw_config,
-            'derived_dir': DERIVED_DIR,
-            # 'derived': derived_config,
+            'pit_dir': PIT_DIR,
+            "tcalendar_path": '${pit_dir}/tcalendar.csv',
+            'raw_dir': '${pit_dir}/raw',
+            # all the raw data items
+            'raw': {
+                'bar_1m': {
+                    'dir': '${raw.dir}/bar_1m',
+                },
+                'univ': {
+                    'dir': '${raw.dir}/univ',
+                },
+                'barra': {
+                    'dir': '${raw.dir}/barra',
+                },
+                'ohlcv_1m': {
+                    'dir': '${raw.dir}/ohlcv_1m',
+                },
+                'return': {
+                    'dir': '${raw.dir}/return',
+                },
+                'lag_return': {
+                    'dir': '${raw.dir}/lag_return',
+                },
+            },
+            'derived_dir': '${pit_dir}/derived',
+            # all the derived data items
+            'derived': {
+                'bar_10m': {
+                    'dir': '${derived.dir}/bar_10m',
+                },
+            },
         }
-        
         cfg = OmegaConf.create(default_config)
         OmegaConf.save(cfg, CONFIG_PATH)
     return PIT_DIR
 
+
 def read_config():
-    return OmegaConf.load(CONFIG_PATH)
+    cfg = OmegaConf.load(CONFIG_PATH)
+    OmegaConf.resolve(cfg)
+    return cfg
