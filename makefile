@@ -9,3 +9,6 @@ clean:
 
 pull_build_install:
 	git pull origin dev && poetry build && pip install --no-deps --force-reinstall dist/*.whl
+
+build_install:
+	poetry build && pip install --no-deps --force-reinstall dist/*.whl	
