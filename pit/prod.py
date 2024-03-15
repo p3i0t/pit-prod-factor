@@ -1603,12 +1603,12 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
     cfg = OmegaConf.merge(prod_cfg, meta_cfg)
     
     from pit.config import read_config
+    from pathlib import Path
     pit_cfg = read_config()
     
-    from pathlib import Path
 
-    data_dir = Path(pit_cfg['dateset']['10m_v2']['dir'])
-    save_dir = Path(pit_cfg['save_dir'])
+    data_dir = Path(pit_cfg.dataset['10m_v2']['dir'])
+    save_dir = Path(pit_cfg.save_dir)
     args = InferenceArguments(
         prod=prod,
         save_dir=save_dir,
