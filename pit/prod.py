@@ -1527,7 +1527,7 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         n_test=cfg.n_test
         )
 
-    dataset_dir = Path(pit_cfg.dataset['10m_v2']['dir'])
+    dataset_dir = Path(pit_cfg.dataset.dir).joinpath('10m_v2')
     save_dir = Path(pit_cfg.save_dir)
     args = TrainArguments(
         prod=prod,
@@ -1578,7 +1578,7 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
     from pit.config import read_config
     from pathlib import Path
     pit_cfg = read_config()
-    data_dir = Path(pit_cfg.dataset['10m_v2']['dir'])
+    data_dir = Path(pit_cfg.dataset.dir).joinpath('10m_v2')
     save_dir = Path(pit_cfg.save_dir)
     args = InferenceArguments(
         prod=prod,
