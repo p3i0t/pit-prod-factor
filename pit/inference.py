@@ -16,16 +16,21 @@ from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.utils import CHECHPOINT_META
-from pit.datasource import (OfflineDataSource, Online10minDatareaderDataSource, OnlineV2DownsampleDataSource)
+from pit.datasource import (
+    OfflineDataSource,
+    Online10minDatareaderDataSource,
+    OnlineV2DownsampleDataSource,
+)
 
 logger = logger.bind(where="inference")
 
 
 __all__ = ["InferenceMode", "infer"]
 
+
 class InferencePipeline:
-    """The general inference pipeline for both offline and online inference.
-    """    
+    """The general inference pipeline for both offline and online inference."""
+
     def __init__(self, args: InferenceArguments):
         self.args = args
         self.models_available = sorted(os.listdir(f"{args.save_dir}/{args.prod}"))
@@ -102,8 +107,10 @@ class InferencePipeline:
             else max(self.args.n_latest)
         )
         ll = 0 if i - n_retain < 0 else i - n_retain
-        models_required = self.models_available[ll : i]
-        logger.info(f"infer on {infer_date:%Y-%m-%d}, models required: {models_required}")
+        models_required = self.models_available[ll:i]
+        logger.info(
+            f"infer on {infer_date:%Y-%m-%d}, models required: {models_required}"
+        )
 
         # delete model cache that is not required, free GPU memory
         to_delete = [k for k in self.model_cache if k not in models_required]
@@ -119,7 +126,7 @@ class InferencePipeline:
             else:
                 _model, _normalizer = self._load_ckpt(ckpt_dir)
                 self.model_cache[model_date] = (_model, _normalizer)
-                
+
             _df = _normalizer.transform(deepcopy(df_cs))  # this is model specific
             x = (
                 _df.select(self.args.x_slot_columns)
@@ -161,9 +168,10 @@ class InferencePipeline:
 
 
 class InferenceMode(str, Enum):
-    offline = 'offline'
-    online = 'online'
-    online_submit = 'online_submit'
+    offline = "offline"
+    online = "online"
+    online_submit = "online_submit"
+
 
 def infer(
     args: InferenceArguments,
@@ -173,30 +181,32 @@ def infer(
     log_path: Optional[str] = None,
     verbose: bool = False,
 ) -> pl.DataFrame | Dict[int, pl.DataFrame] | None:
-    log_path = log_path or 'infer.log'
+    log_path = log_path or "infer.log"
     logger.add(
         sink=f"{log_path}",
         filter=lambda record: record["extra"].get("where") == "inference",
         level="INFO",
-        )
-    
+    )
+
     infer_logger = logger.bind(where="inference")
     if isinstance(infer_date, datetime.date):
         begin, end = infer_date, infer_date
     elif isinstance(infer_date, tuple):
         begin, end = infer_date
     else:
-        raise TypeError(f"date in InferenceArguments should be datetime.date"
-                        f"or Tuple[datetime.date, datetime.date], but is {type(infer_date)}")
+        raise TypeError(
+            f"date in InferenceArguments should be datetime.date"
+            f"or Tuple[datetime.date, datetime.date], but is {type(infer_date)}"
+        )
 
-    infer_logger.info(f'Inference mode: {mode}')
+    infer_logger.info(f"Inference mode: {mode}")
     if mode == InferenceMode.offline:
         ds = OfflineDataSource(
-            data_path=str(args.dataset_dir) + '/*',
+            data_path=str(args.dataset_dir) + "/*",
             columns=["date", "symbol"] + args.x_slot_columns,
             universe=args.universe,
             date_range=(begin, end),
-            date_col='date',
+            date_col="date",
             fill_nan=True,
         )
     elif mode == InferenceMode.online:
@@ -217,7 +227,7 @@ def infer(
         )
     else:
         raise ValueError(f"mode: {mode} not supported.")
-    
+
     if verbose is True:
         s = perf_counter()
     df: pl.DataFrame = ds.collect()
@@ -234,5 +244,3 @@ def infer(
         t = perf_counter() - s
         logger.info(f"InferencePipeline pass time: {t:.2f}s")
     return ip(df)
-
-    

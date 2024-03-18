@@ -376,13 +376,14 @@ def downsample10(n_jobs, n_cpu, verbose):
     "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
 )
 def merge10_v2(n_jobs, n_cpu):
-    dir_10m = "/data2/private/wangxin/raw2/bar_10m"
-    dir_univ = "/data2/private/wangxin/raw2/univ"
-    dir_ret = "/data2/private/wangxin/raw2/return"
-    dir_lag_ret = "/data2/private/wangxin/raw2/lag_return"
+    cfg = read_config()
+    dir_10m = Path(cfg.derived.dir).joinpath('bar_10m')
+    dir_univ = Path(cfg.raw.dir).joinpath('univ')
+    dir_ret = Path(cfg.raw.dir).joinpath('return')
+    dir_lag_ret = Path(cfg.raw.dir).joinpath('lag_return')
 
-    tgt_dir = Path("/data2/private/wangxin/dataset/10m_v2")
-    tgt_dir.mkdir(parents=True, exist_ok=True)
+    tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
+    # tgt_dir.mkdir(parents=True, exist_ok=True)
     from collections import defaultdict
     import re
     import ray
