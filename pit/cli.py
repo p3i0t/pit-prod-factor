@@ -597,18 +597,18 @@ def infer_online(prod, date, verbose):
     help="product name.",
 )
 @click.option(
-    "--begin",
+    "--begin", "-b",
     default="2017-01-01",
     type=DateType,
     help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
 )
 @click.option(
-    "--end",
+    "--end", "-e",
     default="today",
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
-@click.option("--verbose", is_flag=True, help="print more information.")
+@click.option("--verbose", '-v', is_flag=True, help="print more information.")
 def infer_hist(prod, begin, end, verbose):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
