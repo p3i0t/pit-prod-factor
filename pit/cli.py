@@ -615,7 +615,6 @@ def infer_hist(prod, begin, end, verbose):
     """
     from pit.inference import infer, InferenceMode
     from datetime import timedelta
-
     args = get_inference_config(prod=prod)
     begin = any2date(begin)
     end = any2date(end)
@@ -628,10 +627,10 @@ def infer_hist(prod, begin, end, verbose):
             (pl.col("date") >= begin) & (pl.col("date") <= end)
         )
         date_lag = date_lag.with_columns(
-            pl.col(c).cast(pl.Date) for c in ["date", "next", "prev"]
+            pl.col(c).cast(pl.Date) for c in ["date", "next"]
         )
         o = o.join(date_lag, on="date", how="left")
-        o = o.drop(["date", "prev"])
+        o = o.drop(["date"])
         o = o.rename({"next": "date"})
 
     slot = args.y_slots
