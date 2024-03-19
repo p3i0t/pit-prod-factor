@@ -553,7 +553,6 @@ def infer_online(prod, date, verbose):
 
     infer_date = any2date(date)
     args = get_inference_config(prod=prod)
-
     if not is_trading_day(infer_date):
         click.echo(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)

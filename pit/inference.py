@@ -199,7 +199,7 @@ def infer(
             f"or Tuple[datetime.date, datetime.date], but is {type(infer_date)}"
         )
 
-    infer_logger.info(f"Inference mode: {mode}")
+    infer_logger.info(f"Inference mode: {mode}, on prod: {args.prod}")
     if mode == InferenceMode.offline:
         ds = OfflineDataSource(
             data_path=str(args.dataset_dir) + "/*",
