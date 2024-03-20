@@ -26,7 +26,7 @@ def init_config() -> str:
             # all the raw data items
             "raw": {
                 "dir": "${pit_dir}/raw", 
-                "dataitems": ["bar_1m", "univ", "barra", "ohlcv_1m", "return", "lag_return"],
+                "dataitems": ["bar_1m", "univ", "barra", "ohlcv_1m", "return", "lag_return", "tick"],
             },
             # all the derived data items
             "derived": {

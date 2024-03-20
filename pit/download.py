@@ -334,3 +334,30 @@ def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
         categorical_symbol=True,
     )
     return df
+
+def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
+    """Download daily barra style and industry factors.
+
+    Args:
+        begin (Datetime): begin date.
+        end (Datetime): end date.
+
+    Raises:
+        ImportError: Error: module datareader not found
+
+    Returns:
+        pl.DataFrame: _description_
+    """
+    try:
+        import datareader as dr
+    except ImportError:
+        raise ImportError("Error: module datareader not found.")
+
+    df: pl.DataFrame = dr.read(
+        dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
+        begin=begin,
+        end=end,
+        df_lib="polars",
+        categorical_symbol=True,
+    )
+    return df

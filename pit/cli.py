@@ -23,6 +23,7 @@ from pit.download import (
     download_return,
     download_lag_return,
     download_stock_tick,
+    download_barra,
 )
 from pit.config import read_config
 from pit.tcalendar import (
@@ -39,6 +40,7 @@ tasks_dict = {
     "return": download_return,
     "lag_return": download_lag_return,
     "bar_1m": download_stock_minute,
+    'barra': download_barra,
 }
 
 
@@ -288,7 +290,7 @@ def download_1m(begin, end, n_jobs, mem_per_task, verbose):
     "-t",
     "task_name",
     default="ohlcv_1m",
-    type=click.Choice(["return", "lag_return", "ohlcv_1m", "univ"]),
+    type=click.Choice(["return", "lag_return", "ohlcv_1m", "univ", "barra", "tick"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 def download(begin, end, task_name, verbose):
