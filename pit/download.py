@@ -306,3 +306,31 @@ def download_lag_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     }
     df_lag = df_lag.rename(mapping=cols_rename)
     return df_lag
+
+    
+def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
+    """Download all stock tick (snapshot) bars.
+
+    Args:
+        begin (Datetime): begin date.
+        end (Datetime): end date.
+
+    Raises:
+        ImportError: Error: module datareader not found
+
+    Returns:
+        pl.DataFrame: _description_
+    """
+    try:
+        import datareader as dr
+    except ImportError:
+        raise ImportError("Error: module datareader not found.")
+
+    df: pl.DataFrame = dr.read(
+        dr.meta.StockSnapshot(),
+        begin=begin,
+        end=end,
+        df_lib="polars",
+        categorical_symbol=True,
+    )
+    return df

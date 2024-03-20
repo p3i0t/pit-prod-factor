@@ -22,6 +22,7 @@ from pit.download import (
     download_tcalendar,
     download_return,
     download_lag_return,
+    download_stock_tick,
 )
 from pit.config import read_config
 from pit.tcalendar import (
@@ -55,6 +56,113 @@ class ExtendedDate(click.ParamType):
 
 # Instantiate the custom type to use with the click option
 DateType = ExtendedDate()
+
+
+
+@click.command()
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+@click.option("--n_jobs", default=10, type=int, help="number of ray parallel jobs.")
+@click.option("--mem_per_task", default=10, type=int, help="memory per task in GB.")
+@click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
+def download_tick(begin, end, n_jobs, mem_per_task, verbose):
+    """Download tick bars up to today."""
+    import ray
+
+    if is_trading_day(begin):
+        _begin = any2date(begin)
+    else:
+        _begin: datetime.date = adjust_date(begin, 1)
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+
+    if is_trading_day(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(
+                f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
+            )
+    else:
+        _end: datetime.date = adjust_date(end, -1)
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+
+    if _begin <= _end:
+        pass
+    else:
+        click.echo(
+            f"begin date {_begin} is later than end date {_end}, no need to download."
+        )
+        return
+
+    trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
+    if verbose is True:
+        click.echo(
+            f"Targeted {len(trading_dates)} tasks from {trading_dates[0]} to {trading_dates[-1]}."
+        )
+
+    cfg = read_config()
+    item = "tick"
+    item_dir = Path(cfg.raw.dir).joinpath(item)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    left_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(left_dates) == 0:
+        click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
+        return
+    if verbose is True:
+        click.echo(f"Download {item} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} tasks in total")
+        click.echo(f"{len(existing_dates)} tasks already exist.")
+        click.echo(f"{len(left_dates)} tasks to be done.")
+
+    ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
+
+    @ray.remote(max_calls=1, memory=mem_per_task * 1024 * 1024 * 1024)
+    def remote_download(begin, end) -> None:
+        df = download_stock_tick(begin, end)
+        if df.is_empty():
+            if verbose is True:
+                click.echo(f"task {begin} is empty.")
+            return
+        res_list = []
+        for d, _df in df.partition_by(["date"], as_dict=True).items():
+            # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+            if verbose is True:
+                click.echo(f"task {d:%Y-%m-%d} done.")
+            _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+            res_list.append(d)
+
+    task_ids = []
+    n_task_finished = 0
+    for exp_id, d in enumerate(left_dates, 1):
+        task_id = remote_download.options(
+            name="x",
+            num_cpus=1,
+        ).remote(begin=d, end=d)
+        task_ids.append(task_id)
+
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            if verbose is True and n_task_finished % 10 == 0:
+                click.echo(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+    if verbose is True:
+        click.echo(f"{len(left_dates)} tasks done.")
+
 
 
 @click.command()
@@ -383,7 +491,6 @@ def merge10_v2(n_jobs, n_cpu):
     dir_lag_ret = Path(cfg.raw.dir).joinpath('lag_return')
 
     tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
-    # tgt_dir.mkdir(parents=True, exist_ok=True)
     from collections import defaultdict
     import re
     import ray
@@ -678,6 +785,7 @@ pit.add_command(train_single)
 pit.add_command(show)
 pit.add_command(download)
 pit.add_command(download_1m)
+pit.add_command(download_tick)
 pit.add_command(long2widev2)
 pit.add_command(downsample10)
 pit.add_command(merge10_v2)
