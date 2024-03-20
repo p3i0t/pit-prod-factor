@@ -579,9 +579,8 @@ def infer_online(prod, date, verbose):
     infer_dir = Path(cfg.infer_dir)
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
-
     alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
-        mapping={args.tgt_column: "pit"}
+        mapping={args.tgt_column: "alpha"}
     )
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
     alpha.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
@@ -647,12 +646,10 @@ def infer_hist(prod, begin, end, verbose):
 
     use_begin = adjust_date(begin, 1) if prod in ["0930", "0930_1h"] else begin
     use_end = adjust_date(end, 1) if prod in ["0930", "0930_1h"] else end
-
-    o.write_parquet(tgt_dir.joinpath(f"hist_pred_{use_begin}_{use_end}.parq"))
     alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
         mapping={args.tgt_column: "alpha"}
     )
-    alpha.write_parquet(tgt_dir.joinpath(f"hist_alpha_{use_begin}_{use_end}.parq"))
+    alpha.write_parquet(tgt_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
 @click.command()
