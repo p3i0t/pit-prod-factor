@@ -29,6 +29,7 @@ from pit.config import read_config
 from pit.tcalendar import (
     is_trading_day,
     adjust_date,
+    adjust_tcalendar_slot_df,
     get_tcalendar_df,
     load_tcalendar_list,
 )
@@ -776,6 +777,51 @@ def show_config():
     cfg = read_config()
     click.echo(OmegaConf.to_yaml(cfg))
 
+
+@click.command()
+def compute_intraday_return():
+    slots = ['1000', '1030', '1100', '1300', '1330', '1400', '1430', '1500']
+    times = [datetime.time(hour=int(s[:2]), minute=int(s[2:])) for s in slots]
+    cfg = read_config()
+    
+    price_dir = os.path.join(cfg.raw.dir, 'ohlcv_1m')
+    df_price = pl.scan_parquet(price_dir + "/*.parq").collect()
+    
+    cols = ['time', 'symbol', 'close', 'adj_factor']
+    durations = ['15m', '30m', '1h']
+    df_price_1 = df_price.select(cols).filter(pl.col('time').dt.time().is_in(times))
+    
+    _df_list = []
+    for _dur in durations:
+        df_adj = adjust_tcalendar_slot_df(duration=_dur, start_slot=slots)
+        end_times = df_adj.select(pl.col('time').dt.time().unique()).to_series().to_list()
+        df_price_2 = df_price_1.select(cols).filter(pl.col('time').dt.time().is_in(end_times))
+        
+        df_merge = df_price_1.join(df_adj, left_on='time', right_on='date')
+        df_merge = df_merge.join(
+            df_price_2, 
+            left_on=['next', 'symbol'], 
+            right_on=['time', 'symbol'], 
+            suffix='_right'
+        )
+        
+        adj_close = pl.col('close').mul(pl.col('adj_factor'))
+        adj_close_right = pl.col('close_right').mul(pl.col('adj_factor_right'))
+        df_merge = df_merge.with_columns(
+            adj_close_right.truediv(adj_close).sub(1).alias(f'ret_{_dur}')
+        )
+        _df_list.append(df_merge)
+    df_final = pl.concat(_df_list)
+
+    item_dir = os.path.join(cfg.derived.dir, 'intra_ret')
+    item_dir = Path(item_dir).mkdir(parents=True, exist_ok=True)
+    
+    for d, _df in df_final.partition_by(["date"], as_dict=True).items():
+        # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+    click.echo("task intraday return done.")
+    
+        
 
 @click.group()
 def pit():

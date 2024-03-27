@@ -681,22 +681,29 @@ def adjust_date(date: Datetime, n_shift: int) -> datetime.date:
     return datetime.datetime.strptime(tcalendar_list[jj], "%Y-%m-%d").date()
 
 
-def adjust_tcalendar_slot_df(duration: str, start_slot: str = '0930') -> pl.DataFrame:
+def adjust_tcalendar_slot_df(duration: str, start_slot: str | list[str] = '0930') -> pl.DataFrame:
     """Adjust duration with shift.
 
     Args:
         duration (str): duration.
-        start_slot (str): start slot.
+        start_slot (str | list[str]): start slot.
 
     Returns:
         str: adjusted duration.
     """
-    n_next, end_slot = compute_gap_days_and_end_slot(start_slot, duration)
-    df = get_tcalendar_df(n_next)
-    start_duration = pl.duration(hours=int(start_slot[:2]), minutes=int(start_slot[2:]), time_unit='ns')
-    end_duration = pl.duration(hours=int(end_slot[:2]), minutes=int(end_slot[2:]), time_unit='ns')
-    df = df.with_columns(
-        pl.col('date').cast(pl.Datetime(time_unit='ns')).add(start_duration),
-        pl.col('next').cast(pl.Datetime(time_unit='ns')).add(end_duration),
-    )
-    return df
+    
+    if isinstance(start_slot, str):
+        start_slot = [start_slot]
+        
+    _df_list = []
+    for _slot in start_slot:
+        n_next, end_slot = compute_gap_days_and_end_slot(_slot, duration)
+        df = get_tcalendar_df(n_next)
+        start_duration = pl.duration(hours=int(_slot[:2]), minutes=int(_slot[2:]), time_unit='ns')
+        end_duration = pl.duration(hours=int(end_slot[:2]), minutes=int(end_slot[2:]), time_unit='ns')
+        df = df.with_columns(
+            pl.col('date').cast(pl.Datetime(time_unit='ns')).add(start_duration),
+            pl.col('next').cast(pl.Datetime(time_unit='ns')).add(end_duration),
+        )
+        _df_list.append(df)
+    return pl.concat(_df_list)
