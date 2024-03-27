@@ -842,6 +842,7 @@ pit.add_command(infer_online)
 pit.add_command(update_tcalendar)
 pit.add_command(init)
 pit.add_command(show_config)
+pit.add_command(compute_intraday_return)
 
 if __name__ == "__main__":
     pit()
