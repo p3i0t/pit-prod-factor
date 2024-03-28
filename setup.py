@@ -56,4 +56,8 @@ setup(
     version=__version__,
     ext_modules=cythonize(encrypted, compiler_directives={"language_level": "3"}),
     cmdclass={"build_py": build_py},
+    entry_points="""
+    [console_scripts]
+    pit=pit.cli:pit
+    """
 )
