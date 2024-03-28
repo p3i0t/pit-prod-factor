@@ -329,7 +329,9 @@ def download(begin, end, task_name, verbose):
     item_dir = Path(cfg.raw.dir).joinpath(item)
     # item_dir.mkdir(parents=True, exist_ok=True)
 
-    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    existing_dates = sorted([d.split(".")[0] for d in os.listdir(item_dir)])
+    if task_name in ["return", "lag_return"]:
+        existing_dates = existing_dates[:-6] # latest 6 days should be renewed.
     left_dates = sorted(set(trading_dates) - set(existing_dates))
 
     if len(left_dates) == 0:
