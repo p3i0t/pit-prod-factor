@@ -341,7 +341,7 @@ def download(begin, end, task_name, verbose):
         click.echo(f"data of {len(existing_dates)} dates already exist.")
         click.echo(f"data of {len(left_dates)} dates to be done.")
 
-    df = tasks_dict[task_name](begin, end)
+    df = tasks_dict[task_name](left_dates[0], left_dates[-1])
     if df.is_empty():
         click.echo("univ dataframe is empty.")
         return
