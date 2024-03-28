@@ -317,9 +317,7 @@ def download(begin, end, task_name, verbose):
     if _begin <= _end:
         pass
     else:
-        click.echo(
-            f"begin date {_begin} is later than end date {_end}, no need to download."
-        )
+        click.echo(f"begin{_begin} is later than end {_end}, illegal.")
         return
 
     trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
@@ -327,12 +325,13 @@ def download(begin, end, task_name, verbose):
     cfg = read_config()
     item = task_name
     item_dir = Path(cfg.raw.dir).joinpath(item)
-    # item_dir.mkdir(parents=True, exist_ok=True)
 
     existing_dates = sorted([d.split(".")[0] for d in os.listdir(item_dir)])
     if task_name in ["return", "lag_return"]:
-        existing_dates = existing_dates[:-6] # latest 6 days should be renewed.
-    left_dates = sorted(set(trading_dates) - set(existing_dates))
+        # latest 6 days should be renewed.
+        left_dates = sorted(set(trading_dates) - set(existing_dates[:-6]))
+    else:
+        left_dates = sorted(set(trading_dates) - set(existing_dates))
 
     if len(left_dates) == 0:
         click.echo(f"{item} is up to date {datetime.datetime.now().date()}")
