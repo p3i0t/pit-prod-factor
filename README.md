@@ -46,3 +46,12 @@ pit infer-online --prod 1030 --date today -v
 
 Make sure that the production data is ready when running the command, and the online production data is fetched from ``datareader``.
 
+### Training
+
+train single model given the production name and milestone date, e.g. prod 1030 and milestone 2024-02-01:
+
+```shell
+pit train-single -p 1030 -m 2024-02-01
+```
+
+``milestone``  is the date that the model is supposed to be available. Training one single model on a given ``milestone`` only involves information earlier than the ``milestone``.
