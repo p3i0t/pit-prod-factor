@@ -1372,12 +1372,20 @@ def split_date_ranges(
 class ProdsAvailable(str, Enum):
     PROD_0930 = '0930'
     PROD_0930_1H = '0930_1h'
+    PROD_1000 = '1000'
+    PROD_1000_1H = '1000_1h'
     PROD_1030 = '1030'
     PROD_1030_1H = '1030_1h'
+    PROD_1100 = '1100'
+    PROD_1100_1H = '1100_1h'
     PROD_1300 = '1300'
     PROD_1300_1H = '1300_1h'
+    PROD_1330 = '1330'
+    PROD_1330_1H = '1330_1h'
     PROD_1400 = '1400'
     PROD_1400_1H = '1400_1h'
+    PROD_1430 = '1430'
+    PROD_1430_1H = '1430_1h'
 
 
 def list_prods() -> list[str]:
@@ -1408,6 +1416,28 @@ def get_prod_data_config(
             'delay': 0,
             'tgt_column': 'lag_0930_1h',
             }
+    elif prod == ProdsAvailable.PROD_1000:
+        cfg = {
+            'slot': "1000",
+            'x_begin': "0930", 
+            'x_end': "1000",
+            'freq': 10,
+            'ret_prefix': "rtn_v2v_",
+            'ret_durations': ['1D', '2D', '5D'],
+            'delay': 5,
+            'tgt_column': 'rtn_v2v_1005_2D',
+            }
+    elif prod == ProdsAvailable.PROD_1000_1H:
+        cfg = {
+            'slot': "1000",
+            'x_begin': "0930", 
+            'x_end': "1000",
+            'freq': 10,
+            'ret_prefix': "",
+            'ret_durations': ['1h'],
+            'delay': 0,
+            'tgt_column': '1000_1h',
+            }
     elif prod == ProdsAvailable.PROD_1030:
         cfg = {
             'slot': "1030",
@@ -1429,6 +1459,28 @@ def get_prod_data_config(
             'ret_durations': ['1h'],
             'delay': 0,
             'tgt_column': '1030_1h',
+            }
+    elif prod == ProdsAvailable.PROD_1100:
+        cfg = {
+            'slot': "1100",
+            'x_begin': "0930", 
+            'x_end': "1100",
+            'freq': 10,
+            'ret_prefix': "rtn_v2v_",
+            'ret_durations': ['1D', '2D', '5D'],
+            'delay': 5,
+            'tgt_column': 'rtn_v2v_1105_2D',
+            }
+    elif prod == ProdsAvailable.PROD_1100_1H:
+        cfg = {
+            'slot': "1100",
+            'x_begin': "0930", 
+            'x_end': "1100",
+            'freq': 10,
+            'ret_prefix': "",
+            'ret_durations': ['1h'],
+            'delay': 0,
+            'tgt_column': '1100_1h',
             }
     elif prod == ProdsAvailable.PROD_1300:
         cfg = {
@@ -1452,6 +1504,28 @@ def get_prod_data_config(
             'delay': 0,
             'tgt_column': '1300_1h',
             }
+    elif prod == ProdsAvailable.PROD_1330:
+        cfg = {
+            'slot': "1330",
+            'x_begin': "1000", 
+            'x_end': "1330",
+            'freq': 10,
+            'ret_prefix': "rtn_v2v_",
+            'ret_durations': ['1D', '2D', '5D'],
+            'delay': 5,
+            'tgt_column': 'rtn_v2v_1335_2D',
+            }
+    elif prod == ProdsAvailable.PROD_1330_1H:
+        cfg = {
+            'slot': "1330",
+            'x_begin': "1000", 
+            'x_end': "1330",
+            'freq': 10,
+            'ret_prefix': "",
+            'ret_durations': ['1h'],
+            'delay': 0,
+            'tgt_column': '1330_1h',
+            }
     elif prod == ProdsAvailable.PROD_1400:
         cfg = {
             'slot': "1400",
@@ -1473,6 +1547,28 @@ def get_prod_data_config(
             'ret_durations': ['1h'],
             'delay': 0,
             'tgt_column': '1400_1h',
+            } 
+    elif prod == ProdsAvailable.PROD_1430:
+        cfg = {
+            'slot': "1430",
+            'x_begin': "1100", 
+            'x_end': "1430",
+            'freq': 10,
+            'ret_prefix': "rtn_v2v_",
+            'ret_durations': ['1D', '2D', '5D'],
+            'delay': 5,
+            'tgt_column': 'rtn_v2v_1435_2D',
+            }
+    elif prod == ProdsAvailable.PROD_1430_1H:
+        cfg = {
+            'slot': "1430",
+            'x_begin': "1100", 
+            'x_end': "1430",
+            'freq': 10,
+            'ret_prefix': "",
+            'ret_durations': ['1h'],
+            'delay': 0,
+            'tgt_column': '1430_1h',
             } 
     else:
         raise ValueError(f"prod {prod} not supported")

@@ -18,7 +18,6 @@ from dlkit.preprocessing import DataFrameNormalizer
 from dlkit.utils import CHECHPOINT_META
 from pit.datasource import (
     OfflineDataSource,
-    Online10minDatareaderDataSource,
     OnlineV2DownsampleDataSource,
 )
 
@@ -170,7 +169,6 @@ class InferencePipeline:
 class InferenceMode(str, Enum):
     offline = "offline"
     online = "online"
-    online_submit = "online_submit"
 
 
 def infer(
@@ -217,13 +215,6 @@ def infer(
             date_range=(begin, end),
             fill_nan=True,
             verbose=verbose,
-        )
-    elif mode == InferenceMode.online_submit:
-        ds = Online10minDatareaderDataSource(
-            slot_range=(args.x_begin, args.x_end),
-            universe=args.universe,
-            date_range=(begin, end),
-            fill_nan=True,
         )
     else:
         raise ValueError(f"mode: {mode} not supported.")
