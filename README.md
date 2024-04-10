@@ -55,3 +55,19 @@ pit train-single -p 1030 -m 2024-02-01
 ```
 
 ``milestone``  is the date that the model is supposed to be available. Training one single model on a given ``milestone`` only involves information earlier than the ``milestone``.
+
+### Dataset Generation
+
+Assuming 1-minute bars, universe, return data items are all downloaded in ``PIT_DIR``, first downsample the 1-minute bars:
+
+```shell
+pit download10 --n_jobs 10 --cpu_per_task 3 -v
+```
+
+Then merge the processed bars with return:
+
+```shell
+pit merge10-v2 --n_jobs 10 --cpu_per_task 3
+```
+
+The dataset will be stored in ``PIT_DIR/dataset``.
