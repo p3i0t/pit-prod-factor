@@ -44,7 +44,7 @@ run ``pit infer-online`` to generate pit factors, e.g. the following command gen
 pit infer-online --prod 1030 --date today -v
 ```
 
-Make sure that the production data is ready when running the command, and the online production data is fetched from ``datareader``.
+Make sure that the ``production`` data is ready when running the command, and the online ``production`` data is fetched from ``datareader``.
 
 ### Training
 
