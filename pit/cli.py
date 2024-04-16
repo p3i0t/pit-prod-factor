@@ -671,6 +671,7 @@ def infer_online(prod, date, verbose):
     o = infer(
         args=args, infer_date=infer_date, mode=InferenceMode.online, verbose=verbose
     )
+        
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
         next_date = adjust_date(infer_date, 1)
@@ -693,6 +694,14 @@ def infer_online(prod, date, verbose):
     alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
         mapping={args.tgt_column: "alpha"}
     )
+    
+    n_valid_values = o.select([
+        pl.col("alpha").is_not_nan() & pl.col("alpha").is_not_null()
+    ]).sum().item()
+
+    if isinstance(o, pl.DataFrame):
+        click.echo(f"infer on {args.universe}, {len(o)} symbols, {n_valid_values} real valid values.")
+        
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
     alpha.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
 
