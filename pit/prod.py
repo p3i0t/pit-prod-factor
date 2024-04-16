@@ -1385,7 +1385,7 @@ class ProdsAvailable(str, Enum):
     PROD_1400 = '1400'
     PROD_1400_1H = '1400_1h'
     PROD_1430 = '1430'
-    PROD_1430_1H = '1430_1h'
+    PROD_1430_30m = '1430_30m'
 
 
 def list_prods() -> list[str]:
@@ -1559,16 +1559,16 @@ def get_prod_data_config(
             'delay': 5,
             'tgt_column': 'rtn_v2v_1435_2D',
             }
-    elif prod == ProdsAvailable.PROD_1430_1H:
+    elif prod == ProdsAvailable.PROD_1430_30m:
         cfg = {
             'slot': "1430",
             'x_begin': "1100", 
             'x_end': "1430",
             'freq': 10,
             'ret_prefix': "",
-            'ret_durations': ['1h'],
+            'ret_durations': ['30m'],
             'delay': 0,
-            'tgt_column': '1430_1h',
+            'tgt_column': '1430_30m',
             } 
     else:
         raise ValueError(f"prod {prod} not supported")
