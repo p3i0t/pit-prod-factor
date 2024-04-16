@@ -57,11 +57,15 @@ class InferencePipeline:
     ) -> Dict[int, pl.DataFrame] | pl.DataFrame | None:
         if df.shape[0] == 0:
             return pl.DataFrame()
-        df_dict = df.partition_by("date", as_dict=True)  # dict of [date, df_cs]
+        
+        infer_dates = df.select(pl.col('date').unique().sort()).to_series().to_list()
+        # df_dict = df.partition_by("date", as_dict=True)  # dict of [date, df_cs], so expensive
 
         dict_list = []
-        for date in sorted(df_dict.keys()):
-            df_cs = df_dict[date]
+        # for date in sorted(df_dict.keys()):
+            # df_cs = df_dict[date]
+        for date in infer_dates:
+            df_cs = df.filter(pl.col("date") == date)
             df_pred = self._forward_cross_sectional_batch(date, df_cs)
             dict_list.append(df_pred)
 
