@@ -198,6 +198,7 @@ def infer(
         )
 
     infer_logger.info(f"Inference mode: {mode}, on prod: {args.prod}")
+    pl.enable_string_cache()
     if mode == InferenceMode.offline:
         ds = OfflineDataSource(
             data_path=str(args.dataset_dir) + "/*",

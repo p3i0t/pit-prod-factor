@@ -61,7 +61,7 @@ pit train-single -p 1030 -m 2024-02-01
 Assuming 1-minute bars, universe, return data items are all downloaded in ``PIT_DIR``, first downsample the 1-minute bars:
 
 ```shell
-pit download10 --n_jobs 10 --cpu_per_task 3 -v
+pit downsample10 --n_jobs 10 --cpu_per_task 3 -v
 ```
 
 Then merge the processed bars with return:
