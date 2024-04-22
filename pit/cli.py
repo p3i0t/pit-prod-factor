@@ -813,7 +813,7 @@ def compute_slot_return(duration):
         suffix='_right'
     )
     
-    df_merge = df_merge.select(
+    df_ret = df_merge.select(
         pl.col('time').cast(pl.Date).alias('date'),
         pl.col('time'),
         pl.col('symbol'),
@@ -821,9 +821,11 @@ def compute_slot_return(duration):
     )
 
     item_dir = os.path.join(cfg.derived.dir, f'ret_{duration}')
-    item_dir = Path(item_dir).mkdir(parents=True, exist_ok=True)
+    item_dir = Path(item_dir)
+    item_dir.mkdir(parents=True, exist_ok=True)
     
-    for d, _df in df_merge.partition_by(["date"], as_dict=True).items():
+    # df_
+    for d, _df in df_ret.partition_by(["date"], as_dict=True).items():
         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
     click.echo("task slot return done.")
