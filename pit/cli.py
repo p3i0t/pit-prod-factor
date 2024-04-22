@@ -797,6 +797,7 @@ def compute_slot_return(duration):
     
     price_dir = os.path.join(cfg.raw.dir, 'ohlcv_1m')
     cols = ['time', 'symbol', 'adj_close']
+    pl.enable_string_cache()
     df_price = pl.scan_parquet(price_dir + "/*.parq").select(cols).collect()
     
     df_price_1 = df_price.filter(pl.col('time').dt.time().is_in(times))
