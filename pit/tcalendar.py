@@ -653,7 +653,10 @@ def get_tcalendar_df(n_next: int = 1) -> pl.DataFrame:
     df = df.with_columns(
         pl.col('date').cast(pl.Date),
     )
-    df = df.with_columns(pl.col('date').shift(-n_next).alias('next'))
+    df = df.select(
+        pl.col('date'), 
+        pl.col('date').shift(-n_next).alias('next')
+        )
     return df
 
 
@@ -700,9 +703,9 @@ def adjust_tcalendar_slot_df(duration: str, start_slot: str | list[str] = '0930'
         df = get_tcalendar_df(n_next)
         start_duration = pl.duration(hours=int(_slot[:2]), minutes=int(_slot[2:]), time_unit='ns')
         end_duration = pl.duration(hours=int(end_slot[:2]), minutes=int(end_slot[2:]), time_unit='ns')
-        df = df.with_columns(
-            pl.col('date').cast(pl.Datetime(time_unit='ns')).add(start_duration),
-            pl.col('next').cast(pl.Datetime(time_unit='ns')).add(end_duration),
+        df = df.select(
+            pl.col('date').cast(pl.Datetime(time_unit='ns')).add(start_duration).alias('time'),
+            pl.col('next').cast(pl.Datetime(time_unit='ns')).add(end_duration).alias('next_time'),
         )
         _df_list.append(df)
     return pl.concat(_df_list)

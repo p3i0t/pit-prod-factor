@@ -800,20 +800,22 @@ def compute_slot_return(duration):
     pl.enable_string_cache()
     df_price = pl.scan_parquet(price_dir + "/*.parq").select(cols).collect()
     
-    df_price_1 = df_price.filter(pl.col('time').dt.time().is_in(times))
-    df_adj = adjust_tcalendar_slot_df(duration=duration, start_slot=slots)
-    end_times = df_adj.select(pl.col('time').dt.time().unique()).to_series().to_list()
-    df_price_2 = df_price_1.filter(pl.col('time').dt.time().is_in(end_times))
+    df_price_left = df_price.filter(pl.col('time').dt.time().is_in(times))
+    df_adj = adjust_tcalendar_slot_df(duration=duration, start_slot=slots) # two columns: time, next_time
+    end_times = df_adj.select(pl.col('next_time').dt.time().unique()).to_series().to_list()
+    df_price_right = df_price.filter(pl.col('time').dt.time().is_in(end_times))
     
-    df_merge = df_price_1.join(df_adj, left_on='time', right_on='date')
+    df_merge = df_price_left.join(df_adj, on='time')
     df_merge = df_merge.join(
-        df_price_2, 
-        left_on=['next', 'symbol'], 
+        df_price_right, 
+        left_on=['next_time', 'symbol'], 
         right_on=['time', 'symbol'], 
         suffix='_right'
     )
     
-    df_merge = df_merge.with_columns(
+    df_merge = df_merge.select(
+        pl.col('time'),
+        pl.col('symbol'),
         pl.col('adj_close_right').truediv(pl.col("adj_close")).sub(1).alias(f'ret_{duration}')
     )
 
