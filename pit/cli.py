@@ -791,7 +791,7 @@ def show_config():
 @click.command()
 @click.option("--duration", default="15m", type=click.Choice(["15m", "30m", "1h", '1d', '2d', '5d']))
 def compute_slot_return(duration):
-    slots = ['0931', '1000', '1030', '1100', '1300', '1330', '1400', '1430', '1500']
+    slots = ['0931', '1000', '1030', '1100', '1301', '1330', '1400', '1430']
     times = [datetime.time(hour=int(s[:2]), minute=int(s[2:])) for s in slots]
     cfg = read_config()
     
