@@ -76,16 +76,22 @@ def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         categorical_symbol=True,
     )
     
-    df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
-    
+    # limit 涨停价 stopping 跌停价 trade_status 交易状态
     df_factor: pl.DataFrame = dr.read(
-        dr.meta.StockDaily(columns=['adj_factor']),
+        dr.meta.StockDaily(columns=['adj_factor', 'limit', 'stopping']),
         begin=begin,
         end=end,
         df_lib='polars',
         categorical_symbol=True,
     )
     df = df.join(df_factor, on=['date', 'symbol'], how='left')
+    df = df.with_columns(
+        pl.col('open').mul(pl.col('adj_factor')).alias('adj_open'),
+        pl.col('high').mul(pl.col('adj_factor')).alias('adj_high'),
+        pl.col('low').mul(pl.col('adj_factor')).alias('adj_low'),
+        pl.col('close').mul(pl.col('adj_factor')).alias('adj_close'),
+    )
+    df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
     return df
 
 
