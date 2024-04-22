@@ -814,6 +814,7 @@ def compute_slot_return(duration):
     )
     
     df_merge = df_merge.select(
+        pl.col('time').cast(pl.Date).alias('date'),
         pl.col('time'),
         pl.col('symbol'),
         pl.col('adj_close_right').truediv(pl.col("adj_close")).sub(1).alias(f'ret_{duration}')
