@@ -131,7 +131,7 @@ class OnlineV2DownsampleDataSource(DataSource):
         from time import perf_counter
 
         cols = get_bars(feature_set="v2")
-        _import_datareader()
+        dr = _import_datareader()
 
         x_begin, x_end = self.slot_range
         if self.date_range:

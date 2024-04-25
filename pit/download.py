@@ -15,6 +15,8 @@ def _import_datareader():
     except ImportError:
         raise ImportError("Error: module datareader not found")
 
+    return dr
+
         
 def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     """Download all stock minute bars from clickhouse.
@@ -29,7 +31,7 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    _import_datareader()
+    dr = _import_datareader()
     
     df: pl.DataFrame = dr.read(
         dr.meta.StockMinute(
@@ -67,7 +69,7 @@ def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    _import_datareader()
+    dr = _import_datareader()
     
     df: pl.DataFrame = dr.read(
         dr.meta.StockMinute(
@@ -110,7 +112,7 @@ def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: universe.
     """
-    _import_datareader()
+    dr = _import_datareader()
 
     univs = [
         "univ_research",
@@ -170,7 +172,7 @@ def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    _import_datareader()
+    dr = _import_datareader()
     
     n_list = [1, 2, 3, 5]
 
@@ -323,7 +325,7 @@ def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    _import_datareader()
+    dr = _import_datareader()
 
     df: pl.DataFrame = dr.read(
         dr.meta.StockSnapshot(),
@@ -347,7 +349,7 @@ def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    _import_datareader()
+    dr = _import_datareader()
 
     df: pl.DataFrame = dr.read(
         dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
