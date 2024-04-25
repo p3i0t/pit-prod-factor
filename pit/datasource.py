@@ -9,6 +9,8 @@ from dlkit.utils import get_time_slots
 from pit import get_bars
 from pit.utils import any2date
 from pit.tcalendar import _parse_dhm
+from pit.download import _import_datareader
+
 
 __all__ = [
     "DataSource",
@@ -125,15 +127,11 @@ class OnlineV2DownsampleDataSource(DataSource):
         self.verbose = verbose
 
     def collect(self) -> pl.DataFrame:
-        import importlib
         import itertools
         from time import perf_counter
 
         cols = get_bars(feature_set="v2")
-        try:
-            dr = importlib.import_module("datareader")
-        except ImportError:
-            raise ImportError("Error: module datareader not found")
+        _import_datareader()
 
         x_begin, x_end = self.slot_range
         if self.date_range:

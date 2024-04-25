@@ -6,6 +6,16 @@ from pit.tcalendar import last_day_of_year
 
 __all__ = ['download_stock_minute', 'download_ohlcv_minute', 'download_universe', 'download_tcalendar']
 
+
+def _import_datareader():
+    try:
+        import datareader as dr
+        dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
+        dr.URL.DB72 = "clickhouse://alpha_read:32729afc@10.25.1.72:9000"
+    except ImportError:
+        raise ImportError("Error: module datareader not found")
+
+        
 def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     """Download all stock minute bars from clickhouse.
 
@@ -19,11 +29,7 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    try:
-        import datareader as dr
-        dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
+    _import_datareader()
     
     df: pl.DataFrame = dr.read(
         dr.meta.StockMinute(
@@ -61,11 +67,7 @@ def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    try:
-        import datareader as dr
-        dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
+    _import_datareader()
     
     df: pl.DataFrame = dr.read(
         dr.meta.StockMinute(
@@ -108,10 +110,7 @@ def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: universe.
     """
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
+    _import_datareader()
 
     univs = [
         "univ_research",
@@ -171,11 +170,8 @@ def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
+    _import_datareader()
     
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found.")
     n_list = [1, 2, 3, 5]
 
     # delay 5 minutes
@@ -327,10 +323,7 @@ def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found.")
+    _import_datareader()
 
     df: pl.DataFrame = dr.read(
         dr.meta.StockSnapshot(),
@@ -354,10 +347,7 @@ def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    try:
-        import datareader as dr
-    except ImportError:
-        raise ImportError("Error: module datareader not found.")
+    _import_datareader()
 
     df: pl.DataFrame = dr.read(
         dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
