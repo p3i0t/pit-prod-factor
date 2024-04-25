@@ -3,19 +3,10 @@ import polars as pl
 
 from pit.utils import Datetime
 from pit.tcalendar import last_day_of_year
+from pit.dr_context import DatareaderContext
+
 
 __all__ = ['download_stock_minute', 'download_ohlcv_minute', 'download_universe', 'download_tcalendar']
-
-
-def _import_datareader():
-    try:
-        import datareader as dr
-        dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
-        dr.URL.DB72 = "clickhouse://alpha_read:32729afc@10.25.1.72:9000"
-    except ImportError:
-        raise ImportError("Error: module datareader not found")
-
-    return dr
 
         
 def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
@@ -31,27 +22,26 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    dr = _import_datareader()
-    
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockMinute(
-            # columns=None, 
-            version="3.1", abbr=True),
-        begin=begin,
-        end=end,
-        df_lib='polars',
-        categorical_symbol=True,
-    )
-    
-    # df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
-    
-    df_factor: pl.DataFrame = dr.read(
-        dr.meta.StockDaily(columns=['adj_factor']),
-        begin=begin,
-        end=end,
-        df_lib='polars',
-        categorical_symbol=True,
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockMinute(
+                # columns=None, 
+                version="3.1", abbr=True),
+            begin=begin,
+            end=end,
+            df_lib='polars',
+            categorical_symbol=True,
+        )
+        
+        # df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
+        
+        df_factor: pl.DataFrame = dr.read(
+            dr.meta.StockDaily(columns=['adj_factor']),
+            begin=begin,
+            end=end,
+            df_lib='polars',
+            categorical_symbol=True,
+        )
     df = df.join(df_factor, on=['date', 'symbol'], how='left')
     return df
 
@@ -69,25 +59,24 @@ def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    dr = _import_datareader()
-    
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockMinute(
-            columns=['open', 'high', 'low', 'close', 'volume']),
-        begin=begin,
-        end=end,
-        df_lib='polars',
-        categorical_symbol=True,
-    )
-    
-    # limit 涨停价 stopping 跌停价 trade_status 交易状态
-    df_factor: pl.DataFrame = dr.read(
-        dr.meta.StockDaily(columns=['adj_factor', 'limit', 'stopping']),
-        begin=begin,
-        end=end,
-        df_lib='polars',
-        categorical_symbol=True,
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockMinute(
+                columns=['open', 'high', 'low', 'close', 'volume']),
+            begin=begin,
+            end=end,
+            df_lib='polars',
+            categorical_symbol=True,
+        )
+        
+        # limit 涨停价 stopping 跌停价 trade_status 交易状态
+        df_factor: pl.DataFrame = dr.read(
+            dr.meta.StockDaily(columns=['adj_factor', 'limit', 'stopping']),
+            begin=begin,
+            end=end,
+            df_lib='polars',
+            categorical_symbol=True,
+        )
     df = df.join(df_factor, on=['date', 'symbol'], how='left')
     df = df.with_columns(
         pl.col('open').mul(pl.col('adj_factor')).alias('adj_open'),
@@ -112,8 +101,6 @@ def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: universe.
     """
-    dr = _import_datareader()
-
     univs = [
         "univ_research",
         "univ_largemid",
@@ -128,9 +115,10 @@ def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
         "univ_full",
         "mktcap",
     ]
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars', categorical_symbol=True
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars', categorical_symbol=True
+        )
     df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
     return df
 
@@ -143,7 +131,7 @@ def download_tcalendar(begin: Datetime = '20150101', end: Optional[Datetime] = N
         end (Datetime): end date, default to last day of year.
 
     Raises:
-        ImportError: Error: module datareader not found
+        ImportError: Error: module genutils not found
 
     Returns:
         pl.DataFrame: trading calendar.
@@ -151,7 +139,7 @@ def download_tcalendar(begin: Datetime = '20150101', end: Optional[Datetime] = N
     try:
         import genutils as gu
     except ImportError:
-        raise ImportError("Error: module datareader not found")
+        raise ImportError("Error: module genutils not found")
 
     _end = last_day_of_year() if end is None else end
     _df = gu.tcalendar.getdf(begin=begin, end=_end)
@@ -172,8 +160,6 @@ def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    dr = _import_datareader()
-    
     n_list = [1, 2, 3, 5]
 
     # delay 5 minutes
@@ -198,39 +184,40 @@ def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     for slot in slots:
         ret_slots[f"_o2o_{slot[0]}"] = (f"close_{slot[0]}", f"close_{slot[0]}")
 
-    df: pl.DataFrame = dr.read(
-        dr.m.StockReturnDaily(ret_slots, n_days=n_list, abbr=False, future=True),
-        begin=begin,
-        end=end,
-        df_lib="polars",
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.m.StockReturnDaily(ret_slots, n_days=n_list, abbr=False, future=True),
+            begin=begin,
+            end=end,
+            df_lib="polars",
+        )
 
-    # get intraday returns
-    slots = [
-        "0935",
-        "1005",
-        "1035",
-        "1105",
-        "1305",
-        "1335",
-        "1405",
-        "1435",
-        "1000",
-        "1030",
-        "1100",
-        "1130",
-        "1330",
-        "1400",
-        "1430",
-        "1500",
-    ]
-    df_close: pl.DataFrame = dr.read(
-        dr.m.StockMinute(["close"]),
-        begin=begin,
-        end=end,
-        at=slots,
-        df_lib="polars",
-    )
+        # get intraday returns
+        slots = [
+            "0935",
+            "1005",
+            "1035",
+            "1105",
+            "1305",
+            "1335",
+            "1405",
+            "1435",
+            "1000",
+            "1030",
+            "1100",
+            "1130",
+            "1330",
+            "1400",
+            "1430",
+            "1500",
+        ]
+        df_close: pl.DataFrame = dr.read(
+            dr.m.StockMinute(["close"]),
+            begin=begin,
+            end=end,
+            at=slots,
+            df_lib="polars",
+        )
     df_close = df_close.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
     # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
 
@@ -287,7 +274,7 @@ def download_lag_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
         end (Datetime): end date.
 
     Raises:
-        ImportError: Error: module datareader not found
+        ImportError: Error: module genutils not found
 
     Returns:
         pl.DataFrame: _description_
@@ -325,15 +312,14 @@ def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    dr = _import_datareader()
-
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockSnapshot(),
-        begin=begin,
-        end=end,
-        df_lib="polars",
-        categorical_symbol=True,
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockSnapshot(),
+            begin=begin,
+            end=end,
+            df_lib="polars",
+            categorical_symbol=True,
+        )
     return df
 
 def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
@@ -349,13 +335,12 @@ def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: _description_
     """
-    dr = _import_datareader()
-
-    df: pl.DataFrame = dr.read(
-        dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
-        begin=begin,
-        end=end,
-        df_lib="polars",
-        categorical_symbol=True,
-    )
+    with DatareaderContext() as dr:
+        df: pl.DataFrame = dr.read(
+            dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
+            begin=begin,
+            end=end,
+            df_lib="polars",
+            categorical_symbol=True,
+        )
     return df
