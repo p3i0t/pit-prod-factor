@@ -131,7 +131,12 @@ class OnlineV2DownsampleDataSource(DataSource):
         from time import perf_counter
 
         cols = get_bars(feature_set="v2")
-        dr = _import_datareader()
+        try:
+            import datareader as dr
+            dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
+            dr.URL.DB72 = "clickhouse://alpha_read:32729afc@10.25.1.72:9000"
+        except ImportError:
+            raise ImportError("Error: module datareader not found")
 
         x_begin, x_end = self.slot_range
         if self.date_range:
