@@ -691,7 +691,7 @@ def infer_online(prod, date, verbose):
     infer_dir = Path(cfg.infer_dir)
     tgt_dir = infer_dir.joinpath(prod)
     tgt_dir.mkdir(parents=True, exist_ok=True)
-    alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
+    o = o.select(["date", "time", "symbol", args.tgt_column]).rename(
         mapping={args.tgt_column: "alpha"}
     )
     
@@ -703,7 +703,7 @@ def infer_online(prod, date, verbose):
         click.echo(f"infer on {args.universe}, {len(o)} symbols, {n_valid_values} real valid values.")
         
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
-    alpha.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
+    o.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
 
 
 @click.command()
