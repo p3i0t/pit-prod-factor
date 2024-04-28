@@ -1688,7 +1688,7 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         y_columns=cfg.y_cols,
         y_slots=cfg.slot,
         model=cfg.model,
-        n_latest=3,
+        n_latest=1,
         device='cuda',
         tgt_column=cfg.tgt_column,
     )

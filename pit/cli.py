@@ -13,6 +13,7 @@ from pit import (
     get_training_config,
     get_inference_config,
     TrainPipeline,
+    InferencePipeline,
 )
 from pit.utils import any2ymd, any2date
 from pit.download import (
@@ -734,11 +735,33 @@ def infer_hist(prod, begin, end, verbose):
     from pit.inference import infer, InferenceMode
     from datetime import timedelta
     args = get_inference_config(prod=prod)
-    begin = any2date(begin)
-    end = any2date(end)
-    o = infer(
-        args=args, infer_date=(begin, end), mode=InferenceMode.offline, verbose=verbose
-    )
+
+    _begin = any2ymd(begin)
+    _end = any2ymd(end)
+    
+    all_dates = [d.split('.')[0] for d in os.listdir(args.dataset_dir)]
+    infer_dates = [d for d in all_dates if _begin <= d <= _end]
+    
+    ip = InferencePipeline(args=args)
+
+    with pl.StringCache():
+        df_list = []
+        for infer_date in infer_dates:
+            df: pl.LazyFrame = pl.scan_parquet(f"{args.dataset_dir}/{infer_date}.parq")
+            if args.universe:
+                df = df.filter(pl.col(args.universe))
+            # must be behind universe filter, because `universe` column is not in `columns``.
+            df = df.select(["date", "symbol"] + args.x_slot_columns)
+            df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
+            df_list.append(ip(df.collect()))
+            
+        o = pl.concat(df_list)
+        
+    # begin = any2date(begin)
+    # end = any2date(end)
+    # o = infer(
+    #     args=args, infer_date=(begin, end), mode=InferenceMode.offline, verbose=verbose
+    # )
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
         date_lag = get_tcalendar_df(n_next=1).filter(
