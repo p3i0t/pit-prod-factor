@@ -2,6 +2,7 @@ from datetime import datetime
 from time import perf_counter
 from typing import Tuple, Optional
 
+import numpy as np
 from loguru import logger
 import polars as pl
 import torch
@@ -124,6 +125,10 @@ class TrainPipeline:
             test_set = self.df_to_dataset(test_set)
         
         if train_set and eval_set:
+            np.random.seed(self.args.seed)
+            torch.manual_seed(self.args.seed)
+            torch.cuda.manual_seed(self.args.seed)
+            torch.cuda.manual_seed_all(self.args.seed) 
             trainer = StockTrainer(
                 args=self.args,
                 train_dataset=train_set,
