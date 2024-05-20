@@ -1,7 +1,7 @@
-# import os
+import os
 from omegaconf import OmegaConf
 
-# PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
+
 # CONFIG_PATH = os.path.join(PIT_DIR, "config.yml")
 
 # Register a new resolver named "mkdir"
@@ -63,6 +63,7 @@ from omegaconf import OmegaConf
 
 
 def read_config():
+    PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
     default_config = {
         "pit_dir": PIT_DIR,
         "tcalendar_path": "${pit_dir}/tcalendar.csv",
