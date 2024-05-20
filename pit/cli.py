@@ -795,13 +795,13 @@ def infer_hist(prod, begin, end, verbose):
     alpha.write_parquet(tgt_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
-@click.command()
-def init():
-    """Initialize and generate the config.yml."""
-    from pit.config import init_config
+# @click.command()
+# def init():
+#     """Initialize and generate the config.yml."""
+#     from pit.config import init_config
 
-    home_dir = init_config()
-    click.echo(f"Initialize config as {home_dir}")
+#     home_dir = init_config()
+#     click.echo(f"Initialize config as {home_dir}")
 
 
 @click.command()
@@ -814,6 +814,8 @@ def show_config():
 @click.command()
 @click.option("--duration", default="30m", type=click.Choice(["15m", "30m", "1h", "2h", '1d', '2d', '5d']))
 def compute_slot_return(duration):
+    """compute returns for 8 intraday slots.
+    """
     slots = ['0931', '1000', '1030', '1100', '1301', '1330', '1400', '1430']
     times = [datetime.time(hour=int(s[:2]), minute=int(s[2:])) for s in slots]
     cfg = read_config()
@@ -872,7 +874,7 @@ pit.add_command(merge10_v2)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
 pit.add_command(update_tcalendar)
-pit.add_command(init)
+# pit.add_command(init)
 pit.add_command(show_config)
 pit.add_command(compute_slot_return)
 
