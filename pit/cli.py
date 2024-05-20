@@ -727,12 +727,13 @@ def infer_online(prod, date, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option("--out-dir", "-o", default=None, help="output directory.")
 @click.option("--verbose", '-v', is_flag=True, help="print more information.")
-def infer_hist(prod, begin, end, verbose):
+def infer_hist(prod, begin, end, out_dir, verbose):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
-    from pit.inference import infer, InferenceMode
+    # from pit.inference import infer, InferenceMode
     from datetime import timedelta
     args = get_inference_config(prod=prod)
 
@@ -792,7 +793,9 @@ def infer_hist(prod, begin, end, verbose):
     alpha = o.select(["date", "time", "symbol", args.tgt_column]).rename(
         mapping={args.tgt_column: "alpha"}
     )
-    alpha.write_parquet(tgt_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
+    out_dir = Path(out_dir) if out_dir else tgt_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
 # @click.command()
