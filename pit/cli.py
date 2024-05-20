@@ -765,7 +765,7 @@ def infer_hist(prod, begin, end, verbose):
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
         date_lag = get_tcalendar_df(n_next=1).filter(
-            (pl.col("date") >= begin) & (pl.col("date") <= end)
+            (pl.col("date") >= any2date(begin)) & (pl.col("date") <= any2date(end))
         )
         date_lag = date_lag.with_columns(
             pl.col(c).cast(pl.Date) for c in ["date", "next"]
