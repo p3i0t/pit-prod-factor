@@ -609,37 +609,12 @@ def update_tcalendar(verbose):
     default="today",
     help="milestone date of the model to train.",
 )
-def train_single(prod, milestone):
+@click.option("--universe", "-u", default="euniv_largemid", help="universe name.")
+def train_single(prod, milestone, universe):
     """Train single model of given prod and milestone."""
-    args = get_training_config(prod=prod, milestone=milestone)
+    args = get_training_config(prod=prod, milestone=milestone, universe=universe)
     pipe = TrainPipeline(args)
     pipe.run()
-
-
-@click.command()
-@click.option(
-    "--prod",
-    "-p",
-    default="1030",
-    type=click.Choice(list_prods()),
-    help="product name.",
-)
-@click.option(
-    "--mode",
-    "-m",
-    default="train",
-    type=click.Choice(["train", "inference"]),
-    help="train or inference args to show.",
-)
-def show(prod, mode):
-    """List training or inference args."""
-    if mode == "train":
-        args = get_training_config(prod=prod)
-    elif mode == "inference":
-        args = get_inference_config(prod=prod)
-    else:
-        raise ValueError(f"mode {mode} not in ['train', 'inference']")
-    click.echo(args.model_dump())
 
 
 @click.command()
@@ -656,8 +631,11 @@ def show(prod, mode):
 @click.option(
     "--n_latest", default=1, type=int, help="number of latest models to use."
 )
+@click.option(
+    "--universe", "-u", default="euniv_largemid", help="universe name."
+)
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
-def infer_online(prod, date, n_latest, verbose):
+def infer_online(prod, date, n_latest, universe, verbose):
     """Online inference on single date.
 
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -667,7 +645,7 @@ def infer_online(prod, date, n_latest, verbose):
     from datetime import timedelta
 
     infer_date = any2date(date)
-    args = get_inference_config(prod=prod, n_latest=n_latest)
+    args = get_inference_config(prod=prod, n_latest=n_latest, universe=universe)
     if not is_trading_day(infer_date):
         click.echo(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
@@ -733,14 +711,17 @@ def infer_online(prod, date, n_latest, verbose):
 @click.option(
     "--n_latest", default=1, type=int, help="number of latest models to use."
 )
+@click.option(
+    "--universe", "-u", default="euniv_largemid", help="universe name."
+)
 @click.option("--out-dir", "-o", default=None, help="output directory.")
-def infer_hist(prod, begin, end, n_latest, out_dir):
+def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     # from pit.inference import infer, InferenceMode
     from datetime import timedelta
-    args = get_inference_config(prod=prod, n_latest=n_latest)
+    args = get_inference_config(prod=prod, n_latest=n_latest, universe=universe)
 
     _begin = any2ymd(begin)
     _end = any2ymd(end)
