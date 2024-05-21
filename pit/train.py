@@ -12,6 +12,7 @@ from dlkit.data import StockDataset
 from dlkit.utils import CHECHPOINT_META
 
 from pit.datasource import OfflineDataSource
+from pit.utils import any2date
 
 train_logger = logger.bind(where="train_pipeline")
 
@@ -36,12 +37,13 @@ class TrainPipeline:
             end = self.args.test_date_range[-1] 
         else:
             end = self.args.eval_date_range[-1] 
+
         self.date_col = 'date'
         self.offline_ds = OfflineDataSource(
             data_path=str(self.args.dataset_dir) + '/*',
             columns=["date", "symbol"] + self.args.x_slot_columns + self.args.y_columns,
             universe=self.args.universe,
-            date_range=(begin, end),
+            date_range=(any2date(begin), any2date(end)),
             date_col=self.date_col,
             fill_nan=True,
         )

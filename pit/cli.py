@@ -798,15 +798,6 @@ def infer_hist(prod, begin, end, n_latest, out_dir):
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
-# @click.command()
-# def init():
-#     """Initialize and generate the config.yml."""
-#     from pit.config import init_config
-
-#     home_dir = init_config()
-#     click.echo(f"Initialize config as {home_dir}")
-
-
 @click.command()
 def show_config():
     """Print the configurations in the current config file."""
@@ -863,7 +854,7 @@ def compute_slot_return(duration):
 @click.group()
 def pit():
     """pit: Alpha Signals Generator of Pit."""
-    # click.echo("Alpha Signals Generator of Pit.")
+    ...
 
 
 pit.add_command(train_single)
@@ -877,7 +868,6 @@ pit.add_command(merge10_v2)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
 pit.add_command(update_tcalendar)
-# pit.add_command(init)
 pit.add_command(show_config)
 pit.add_command(compute_slot_return)
 
