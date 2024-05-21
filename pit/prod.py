@@ -1589,7 +1589,6 @@ _default_config = {
     'n_eval': 30,
     'n_lag': 5,
     'n_test': 0,
-    'n_latest': 3,
 }
 
 def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Optional[str] = None) -> TrainArguments:
@@ -1658,7 +1657,8 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     return args
 
 
-def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArguments:
+def get_inference_config(prod: Optional[ProdsAvailable] = None, n_latest: int = 1) -> InferenceArguments:
+    
     if prod is None:
         raise ValueError("prod must be specified")
     
@@ -1688,7 +1688,7 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         y_columns=cfg.y_cols,
         y_slots=cfg.slot,
         model=cfg.model,
-        n_latest=1,
+        n_latest=n_latest,
         device='cuda',
         tgt_column=cfg.tgt_column,
     )

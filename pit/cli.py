@@ -653,8 +653,11 @@ def show(prod, mode):
 @click.option(
     "--date", "-d", default="today", help="the date of data used for inference."
 )
+@click.option(
+    "--n_latest", default=1, type=int, help="number of latest models to use."
+)
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
-def infer_online(prod, date, verbose):
+def infer_online(prod, date, n_latest, verbose):
     """Online inference on single date.
 
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -664,7 +667,7 @@ def infer_online(prod, date, verbose):
     from datetime import timedelta
 
     infer_date = any2date(date)
-    args = get_inference_config(prod=prod)
+    args = get_inference_config(prod=prod, n_latest=n_latest)
     if not is_trading_day(infer_date):
         click.echo(f"generate date {infer_date} is not a trading date !!!")
         sys.exit(0)
@@ -727,15 +730,17 @@ def infer_online(prod, date, verbose):
     type=DateType,
     help="end date, e.g. '20231001', '2023-10-01', or `today`.",
 )
+@click.option(
+    "--n_latest", default=1, type=int, help="number of latest models to use."
+)
 @click.option("--out-dir", "-o", default=None, help="output directory.")
-@click.option("--verbose", '-v', is_flag=True, help="print more information.")
-def infer_hist(prod, begin, end, out_dir, verbose):
+def infer_hist(prod, begin, end, n_latest, out_dir):
     """Inference on historical data.
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
     """
     # from pit.inference import infer, InferenceMode
     from datetime import timedelta
-    args = get_inference_config(prod=prod)
+    args = get_inference_config(prod=prod, n_latest=n_latest)
 
     _begin = any2ymd(begin)
     _end = any2ymd(end)
@@ -758,11 +763,6 @@ def infer_hist(prod, begin, end, out_dir, verbose):
             
         o = pl.concat(df_list)
         
-    # begin = any2date(begin)
-    # end = any2date(end)
-    # o = infer(
-    #     args=args, infer_date=(begin, end), mode=InferenceMode.offline, verbose=verbose
-    # )
     assert isinstance(o, pl.DataFrame)
     if prod in ["0930", "0930_1h"]:
         date_lag = get_tcalendar_df(n_next=1).filter(
