@@ -102,7 +102,10 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
     cfg = read_config()
     item_dir = Path(cfg.raw.dir).joinpath(task_name)
 
-    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    existing_dates = sorted([d.split(".")[0] for d in os.listdir(item_dir)])
+    if task_name in ['return', 'lag_return']:
+        n_recent = 6
+        existing_dates = existing_dates[:-n_recent]
     left_dates = sorted(set(trading_dates) - set(existing_dates))
 
     if len(left_dates) == 0:
