@@ -17,10 +17,10 @@ from pit import (
 )
 from pit.utils import any2ymd, any2date
 from pit.download import (
+    download_tcalendar,
     download_stock_minute,
     download_universe,
     download_ohlcv_minute,
-    download_tcalendar,
     download_return,
     download_lag_return,
     download_stock_tick,
@@ -36,12 +36,14 @@ from pit.tcalendar import (
 )
 
 
+# data of these tasks is stored as one file per date. 
 tasks_dict = {
+    "bar_1m": download_stock_minute,
     "ohlcv_1m": download_ohlcv_minute,
+    'tick': download_stock_tick,
     "univ": download_universe,
     "return": download_return,
     "lag_return": download_lag_return,
-    "bar_1m": download_stock_minute,
     'barra': download_barra,
 }
 
@@ -61,6 +63,109 @@ class ExtendedDate(click.ParamType):
 # Instantiate the custom type to use with the click option
 DateType = ExtendedDate()
 
+class TaskNotSupportedError(Exception):
+    ...
+
+def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True, ray_kwargs: dict = {}):
+    if task_name not in tasks_dict:
+        click.echo(f"task {task_name} is not supported.")
+        raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
+    if is_trading_day(begin):
+        _begin = any2date(begin)
+    else:
+        _begin: datetime.date = adjust_date(begin, 1)
+        if verbose is True:
+            click.echo(f"begin date {begin} is not trading day, adjust to {_begin}")
+
+    if is_trading_day(end) and datetime.datetime.now().strftime("%H%M") > "2300":
+        _end = any2date(end)
+        if verbose is True:
+            click.echo(
+                f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
+            )
+    else:
+        _end: datetime.date = adjust_date(end, -1)
+        if verbose is True:
+            click.echo(f"end date {end} is not trading day, adjust to {_end}")
+
+    if _begin > _end:
+        click.echo(
+            f"begin date {_begin} is later than end date {_end}, no need to download."
+        )
+        return 
+
+    trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
+    if verbose is True:
+        click.echo(
+            f"task {task_name}: {len(trading_dates)} jobs from {trading_dates[0]} to {trading_dates[-1]}."
+        )
+
+    cfg = read_config()
+    item_dir = Path(cfg.raw.dir).joinpath(task_name)
+
+    existing_dates = [d.split(".")[0] for d in os.listdir(item_dir)]
+    left_dates = sorted(set(trading_dates) - set(existing_dates))
+
+    if len(left_dates) == 0:
+        click.echo(f"{task_name} is up to date {datetime.datetime.now().date()}")
+        return
+    if verbose is True:
+        click.echo(f"Download {task_name} to directory={item_dir}")
+        click.echo(f"{len(trading_dates)} tasks in total")
+        click.echo(f"{len(existing_dates)} tasks already exist.")
+        click.echo(f"{len(left_dates)} tasks to be done.")
+
+
+    if task_name in ['tick', 'bar_1m', 'ohlcv_1m']:
+        # fetch data in parallel on a daily basis since data is large.
+        import ray
+        n_jobs = ray_kwargs.get('n_jobs', 10)
+        memory_per_task = ray_kwargs.get('memory_per_task', 8)
+        
+        ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
+        @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
+        def remote_download(begin, end) -> None:
+            df = download_stock_tick(begin, end)
+            if df.is_empty():
+                if verbose is True:
+                    click.echo(f"task {begin} is empty.")
+                return
+            res_list = []
+            for d, _df in df.partition_by(["date"], as_dict=True).items():
+                # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+                if verbose is True:
+                    click.echo(f"task {d:%Y-%m-%d} done.")
+                _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+                res_list.append(d)
+
+        task_ids = []
+        n_task_finished = 0
+        for exp_id, d in enumerate(left_dates, 1):
+            task_id = remote_download.options(
+                name="x",
+                num_cpus=1,
+            ).remote(begin=d, end=d)
+            task_ids.append(task_id)
+
+            if len(task_ids) >= n_jobs:
+                dones, task_ids = ray.wait(task_ids, num_returns=1)
+                ray.get(dones)
+                n_task_finished += 1
+                if verbose is True and n_task_finished % 10 == 0:
+                    click.echo(f"{n_task_finished} tasks finished.")
+        ray.get(task_ids)
+        if verbose is True:
+            click.echo(f"{len(left_dates)} tasks done.")
+    else:
+        # fetch all in one run since data is small.
+        df = tasks_dict[task_name](left_dates[0], left_dates[-1])
+        if df.is_empty():
+            click.echo("univ dataframe is empty.")
+            return
+        for d, _df in df.partition_by(["date"], as_dict=True).items():
+            _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+        click.echo(f"task {task_name} done.")
+    
 
 
 @click.command()
@@ -352,6 +457,40 @@ def download(begin, end, task_name, verbose):
         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
     click.echo(f"task {task_name} done.")
 
+
+@click.command()
+@click.option(
+    "--begin",
+    default="2017-01-01",
+    type=DateType,
+    help="begin date, e.g. '20210101', '2021-01-01', 'today'.",
+)
+@click.option(
+    "--end",
+    default="today",
+    type=DateType,
+    help="end date, e.g. '20231001', '2023-10-01', or `today`.",
+)
+@click.option(
+    "--task",
+    "-t",
+    "task_name",
+    default="ohlcv_1m",
+    type=click.Choice(["return", "lag_return", "ohlcv_1m", "univ", "barra", "tick", "bar_1m", "all"]),
+)
+@click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
+def download_task(begin, end, task_name, verbose):
+    if task_name == "all":
+        tasks = list(tasks_dict.keys())
+    else:
+        if task_name not in tasks_dict:
+            click.echo(f"task {task_name} is not supported.")
+            raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
+        tasks = [task_name]
+    
+    for task in tasks:
+        _run_download_for_one_task(begin, end, task, verbose=verbose)
+    
 
 @click.command()
 @click.option(
@@ -842,6 +981,7 @@ pit.add_command(train_single)
 pit.add_command(download)
 pit.add_command(download_1m)
 pit.add_command(download_tick)
+pit.add_command(download_task)
 pit.add_command(long2widev2)
 pit.add_command(downsample10)
 pit.add_command(merge10_v2)
