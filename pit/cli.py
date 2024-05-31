@@ -127,7 +127,7 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
         ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
         @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
         def remote_download(begin, end) -> None:
-            df = download_stock_tick(begin, end)
+            df = tasks_dict[task_name](begin, end)
             if df.is_empty():
                 if verbose is True:
                     click.echo(f"task {begin} is empty.")
