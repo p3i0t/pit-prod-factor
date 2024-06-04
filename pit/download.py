@@ -26,7 +26,7 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         df: pl.DataFrame = dr.read(
             dr.meta.StockMinute(
                 # columns=None, 
-                version="3.1", abbr=True),
+                version="3.4", abbr=True),
             begin=begin,
             end=end,
             df_lib='polars',
@@ -69,7 +69,7 @@ def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
             categorical_symbol=True,
         )
         
-        # limit 涨停价 stopping 跌停价 trade_status 交易状态
+        # limit 涨停仄1�7 stopping 跌停仄1�7 trade_status 交易状��1�7
         df_factor: pl.DataFrame = dr.read(
             dr.meta.StockDaily(columns=['adj_factor', 'limit', 'stopping']),
             begin=begin,
