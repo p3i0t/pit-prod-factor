@@ -18,15 +18,15 @@ packages = [
 python = "^3.10"
 click = "^8.1"
 einops = "^0.7.0"
-akshare = "^1.12.20"
 polars = "0.19.19"
 omegaconf = "^2.3.0"
 loguru = "^0.7.2"
 # torch = "^2.2.0"
 python-dateutil = "^2.8.2"
-# numpy = "^1.26.4"
+numpy = "^1.26.4"
 pydantic = "^2.6.0"
 ray = "^2.9.3"
+torch = "^2.3.1"
 
 
 [tool.poetry.group.test.dependencies]
