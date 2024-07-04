@@ -148,8 +148,8 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
                 if verbose is True and n_task_finished % 10 == 0:
                     click.echo(f"{n_task_finished} tasks finished.")
         ray.get(task_ids)
-        if verbose is True:
-            click.echo(f"{len(left_dates)} tasks done.")
+
+        click.echo(f"{len(left_dates)} tasks done.")
     else:
         # fetch all in one run since data is small.
         df = tasks_dict[task_name](left_dates[0], left_dates[-1])
@@ -264,7 +264,6 @@ def downsample10(n_jobs, n_cpu, verbose):
 )
 def generate_dataset(n_jobs, n_cpu):
     cfg = read_config()
-    dir_10m = Path(cfg.derived.dir).joinpath('bar_10m')
     dir_1m = Path(cfg.raw.dir).joinpath('bar_1m')
     dir_univ = Path(cfg.raw.dir).joinpath('univ')
     dir_ret = Path(cfg.raw.dir).joinpath('return')
@@ -288,7 +287,7 @@ def generate_dataset(n_jobs, n_cpu):
     v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
 
     src_files = (
-        set(os.listdir(dir_10m)) & set(os.listdir(dir_univ)) & set(os.listdir(dir_ret))
+        set(os.listdir(dir_1m)) & set(os.listdir(dir_univ)) & set(os.listdir(dir_ret))
     )
     src_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in sorted(src_files)[:-6]]
 
