@@ -182,7 +182,7 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
     type=click.Choice(["return", "lag_return", "univ", "bar_1m", "all"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
-def download_task(begin, end, task_name, verbose):
+def download(begin, end, task_name, verbose):
     if task_name == "all":
         tasks = list(tasks_dict.keys())
     else:
@@ -564,7 +564,7 @@ def pit():
 
 
 pit.add_command(train_single)
-pit.add_command(download_task)
+pit.add_command(download)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
