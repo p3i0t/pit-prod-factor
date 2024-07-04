@@ -2,7 +2,7 @@
 
 Project of ``pit`` factors. This project maintains the whole lifecycle to generate a production alpha factor, including: download raw data, data processing, training pipeline, inference pipeline. A cli is exposed, zero extra code is required to use it.
 
-All data items (raw or processed), model checkpoints etc are stored in ``pit`` home directory specified by environment variable `PIT_DIR`, which defaults to `~/.pit`.
+All data, model checkpoints etc are stored in ``pit`` home directory specified by environment variable `PIT_DIR`, which defaults to `~/.pit`.
 
 ## Usage via CLI
 
@@ -14,15 +14,6 @@ pit --help
 
 to get the full command list.
 
-### Initialization
-
-run 
-
-```pit init``` 
-
-to initialize the directory structure in ``PIT_DIR``.
-
-You have to run this again if a new ``PIT_DIR`` is set.
 
 ### Update trading calendar
 
@@ -36,15 +27,21 @@ to update the calendar, the calendar starts from 2015-01-01, and ends on the las
 
   **Hint: Since the trading calendar is updated in an unpredictable manner due to adjustment of public holidays in China. It is advised to update the calendar every day.**
 
-### Online factor generation
+### Download data
 
-run ``pit infer-online`` to generate pit factors, e.g. the following command generate pit factor at 1030 on date today (other acceptable date argument can be in format like 20240401, 2024-04-01) in verbose mode.
+download all data items (return/lag_return/univ/bar_1m) from 2017-01-01 to today:
 
 ```shell
-pit infer-online --prod 1030 --date today -v
+pit download -t all --begin 2017-01-01 --end today -v
 ```
 
-Make sure that the ``production`` data is ready when running the command, and the online ``production`` data is fetched from ``datareader``.
+### Dataset Generation
+
+```shell
+pit generate-dataset
+```
+
+The dataset will be stored in ``PIT_DIR/dataset``.
 
 ### Training
 
@@ -56,18 +53,14 @@ pit train-single -p 1030 -m 2024-02-01
 
 ``milestone``  is the date that the model is supposed to be available. Training one single model on a given ``milestone`` only involves information earlier than the ``milestone``.
 
-### Dataset Generation
 
-Assuming 1-minute bars, universe, return data items are all downloaded in ``PIT_DIR``, first downsample the 1-minute bars:
+### Online factor generation
 
-```shell
-pit downsample10 --n_jobs 10 --cpu_per_task 3 -v
-```
-
-Then merge the processed bars with return:
+run ``pit infer-online`` to generate pit factors, e.g. the following command generate pit factor at 1030 on date today (other acceptable date argument can be in format like 20240401, 2024-04-01) in verbose mode.
 
 ```shell
-pit merge10-v2 --n_jobs 10 --cpu_per_task 3
+pit infer-online --prod 1030 --date today -v
 ```
 
-The dataset will be stored in ``PIT_DIR/dataset``.
+Make sure that the ``production`` data is ready when running the command, and the online ``production`` data is fetched from ``datareader``.
+
