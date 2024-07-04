@@ -28,11 +28,6 @@ def read_config():
             "dir": "${pit_dir}/raw", 
             "dataitems": ["bar_1m", "univ", "return", "lag_return"],
         },
-        # all the derived data items
-        "derived": {
-            "dir": "${pit_dir}/derived",
-            "dataitems": ["bar_10m"]
-        },
         "dataset": {
             "dir": "${pit_dir}/dataset",
             "dataitems": ["10m_v2"],
@@ -50,9 +45,6 @@ def read_config():
     Path(cfg.raw.dir).mkdir(parents=True, exist_ok=True)
     for item in cfg.raw.dataitems:
         Path(f"{cfg.raw.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
-    Path(cfg.derived.dir).mkdir(parents=True, exist_ok=True)
-    for item in cfg.derived.dataitems:
-        Path(f"{cfg.derived.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
     Path(cfg.dataset.dir).mkdir(parents=True, exist_ok=True)
     for item in cfg.dataset.dataitems:
         Path(f"{cfg.dataset.dir}").joinpath(item).mkdir(parents=True, exist_ok=True)
