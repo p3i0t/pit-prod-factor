@@ -193,7 +193,7 @@ class OnlineV2DownsampleDataSource(DataSource):
                 every="10m",
                 period="9m",
                 offset="1m",
-                by=["symbol", "date"],
+                group_by=["symbol", "date"],
                 closed="both",
                 include_boundaries=True,
             )
