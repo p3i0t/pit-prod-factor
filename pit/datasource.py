@@ -9,6 +9,7 @@ from dlkit.utils import get_time_slots
 from pit import get_bars
 from pit.utils import any2date
 from pit.tcalendar import _parse_dhm
+from pit.dr_context import DatareaderContext
 
 __all__ = [
     "DataSource",
@@ -125,13 +126,14 @@ class OnlineV2DownsampleDataSource(DataSource):
         self.verbose = verbose
 
     def collect(self) -> pl.DataFrame:
-        import importlib
         import itertools
         from time import perf_counter
 
         cols = get_bars(feature_set="v2")
         try:
-            dr = importlib.import_module("datareader")
+            import datareader as dr
+            dr.URL.DB73 = "clickhouse://test_wyw_allread:3794b0c0@10.25.1.73:9000"
+            dr.URL.DB72 = "clickhouse://alpha_read:32729afc@10.25.1.72:9000"
         except ImportError:
             raise ImportError("Error: module datareader not found")
 
@@ -144,25 +146,26 @@ class OnlineV2DownsampleDataSource(DataSource):
 
         slots_1min = get_time_slots(start=x_begin, end=x_end, freq_in_min=1)
 
-        s = perf_counter()
-        df_1min: pl.DataFrame = dr.read(
-            dr.meta.StockMinute(columns=cols, version="2", abbr=True, production=True),
-            begin=infer_begin,
-            end=infer_end,
-            at=slots_1min,
-            df_lib="polars",
-        )
-        t = perf_counter() - s
-        logger.info(f"read 1min bars from datareader, time elapsed: {t:.2f}s")
-
-        if self.universe:
-            df_univ: pl.DataFrame = dr.read(
-                dr.m.StockUniverse(self.universe),
+        with DatareaderContext() as dr:
+            s = perf_counter()
+            df_1min: pl.DataFrame = dr.read(
+                dr.meta.StockMinute(columns=cols, version="2", abbr=True, production=True),
                 begin=infer_begin,
                 end=infer_end,
+                at=slots_1min,
                 df_lib="polars",
             )
-            df_1min = df_univ.join(df_1min, on=["date", "symbol"], how="left")
+            t = perf_counter() - s
+            logger.info(f"read 1min bars from datareader, time elapsed: {t:.2f}s")
+
+            if self.universe:
+                df_univ: pl.DataFrame = dr.read(
+                    dr.m.StockUniverse(self.universe),
+                    begin=infer_begin,
+                    end=infer_end,
+                    df_lib="polars",
+                )
+                df_1min = df_univ.join(df_1min, on=["date", "symbol"], how="left")
 
         if df_1min.shape[0] == 0:
             logger.error("no 1min bars available.")
@@ -190,7 +193,7 @@ class OnlineV2DownsampleDataSource(DataSource):
                 every="10m",
                 period="9m",
                 offset="1m",
-                by=["symbol", "date"],
+                group_by=["symbol", "date"],
                 closed="both",
                 include_boundaries=True,
             )

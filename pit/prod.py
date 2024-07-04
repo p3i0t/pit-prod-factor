@@ -1584,15 +1584,17 @@ _default_config = {
     'model': 'GPT_small',
     'epochs': 20,
     'patience': 6,
-    'universe': 'euniv_largemid',
     'n_train': 1000,
     'n_eval': 30,
     'n_lag': 5,
     'n_test': 0,
-    'n_latest': 3,
 }
 
-def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Optional[str] = None) -> TrainArguments:
+def get_training_config(
+    prod: Optional[ProdsAvailable] = None, 
+    milestone: Optional[str] = None, 
+    universe: str = 'euniv_largemid'
+    ) -> TrainArguments:
     if prod is None:
         raise ValueError("prod must be specified")
     from pit.utils import any2ymd
@@ -1630,7 +1632,7 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
         save_dir=save_dir,
         dataset_dir=dataset_dir,
         milestone=milestone,
-        universe=cfg.universe,
+        universe=universe,
         x_columns=get_bars(cfg.feature_set),
         x_begin=cfg.x_begin,
         x_end=cfg.x_end,
@@ -1658,7 +1660,12 @@ def get_training_config(prod: Optional[ProdsAvailable] = None, milestone: Option
     return args
 
 
-def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArguments:
+def get_inference_config(
+    prod: Optional[ProdsAvailable] = None, 
+    n_latest: int = 1,
+    universe: str = 'euniv_largemid'
+    ) -> InferenceArguments:
+    
     if prod is None:
         raise ValueError("prod must be specified")
     
@@ -1680,7 +1687,7 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         prod=prod,
         save_dir=save_dir,
         dataset_dir=data_dir,
-        universe=cfg.universe,
+        universe=universe,
         x_columns=get_bars(cfg.feature_set),
         x_begin=cfg.x_begin,
         x_end=cfg.x_end,
@@ -1688,7 +1695,7 @@ def get_inference_config(prod: Optional[ProdsAvailable] = None) -> InferenceArgu
         y_columns=cfg.y_cols,
         y_slots=cfg.slot,
         model=cfg.model,
-        n_latest=3,
+        n_latest=n_latest,
         device='cuda',
         tgt_column=cfg.tgt_column,
     )

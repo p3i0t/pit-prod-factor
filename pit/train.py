@@ -2,6 +2,7 @@ from datetime import datetime
 from time import perf_counter
 from typing import Tuple, Optional
 
+import numpy as np
 from loguru import logger
 import polars as pl
 import torch
@@ -11,6 +12,7 @@ from dlkit.data import StockDataset
 from dlkit.utils import CHECHPOINT_META
 
 from pit.datasource import OfflineDataSource
+from pit.utils import any2date
 
 train_logger = logger.bind(where="train_pipeline")
 
@@ -35,12 +37,13 @@ class TrainPipeline:
             end = self.args.test_date_range[-1] 
         else:
             end = self.args.eval_date_range[-1] 
+
         self.date_col = 'date'
         self.offline_ds = OfflineDataSource(
             data_path=str(self.args.dataset_dir) + '/*',
             columns=["date", "symbol"] + self.args.x_slot_columns + self.args.y_columns,
             universe=self.args.universe,
-            date_range=(begin, end),
+            date_range=(any2date(begin), any2date(end)),
             date_col=self.date_col,
             fill_nan=True,
         )
@@ -124,6 +127,10 @@ class TrainPipeline:
             test_set = self.df_to_dataset(test_set)
         
         if train_set and eval_set:
+            np.random.seed(self.args.seed)
+            torch.manual_seed(self.args.seed)
+            torch.cuda.manual_seed(self.args.seed)
+            torch.cuda.manual_seed_all(self.args.seed) 
             trainer = StockTrainer(
                 args=self.args,
                 train_dataset=train_set,
