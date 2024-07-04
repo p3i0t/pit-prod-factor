@@ -26,7 +26,7 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
         df: pl.DataFrame = dr.read(
             dr.meta.StockMinute(
                 # columns=None, 
-                # version="3.4",
+                version="2",
                 abbr=True),
             begin=begin,
             end=end,
