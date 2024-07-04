@@ -1,12 +1,12 @@
 from typing import Optional
+
 import polars as pl
 
-from pit.utils import Datetime
-from pit.tcalendar import last_day_of_year
 from pit.dr_context import DatareaderContext
+from pit.tcalendar import last_day_of_year
+from pit.utils import Datetime
 
-
-__all__ = ['download_stock_minute', 'download_ohlcv_minute', 'download_universe', 'download_tcalendar']
+__all__ = ['download_stock_minute', 'download_universe', 'download_tcalendar']
 
         
 def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
@@ -43,48 +43,6 @@ def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
             categorical_symbol=True,
         )
     df = df.join(df_factor, on=['date', 'symbol'], how='left')
-    return df
-
-    
-def download_ohlcv_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Download all stock minute bars from clickhouse.
-
-    Args:
-        begin (Datetime): begin date.
-        end (Datetime): end date.
-
-    Raises:
-        ImportError: Error: module datareader not found
-
-    Returns:
-        pl.DataFrame: _description_
-    """
-    with DatareaderContext() as dr:
-        df: pl.DataFrame = dr.read(
-            dr.meta.StockMinute(
-                columns=['open', 'high', 'low', 'close', 'volume']),
-            begin=begin,
-            end=end,
-            df_lib='polars',
-            categorical_symbol=True,
-        )
-        
-        # limit 娑ㄥ仠浠� stopping 璺屽仠浠� trade_status 浜ゆ槗鐘舵€�
-        df_factor: pl.DataFrame = dr.read(
-            dr.meta.StockDaily(columns=['adj_factor', 'limit', 'stopping']),
-            begin=begin,
-            end=end,
-            df_lib='polars',
-            categorical_symbol=True,
-        )
-    df = df.join(df_factor, on=['date', 'symbol'], how='left')
-    df = df.with_columns(
-        pl.col('open').mul(pl.col('adj_factor')).alias('adj_open'),
-        pl.col('high').mul(pl.col('adj_factor')).alias('adj_high'),
-        pl.col('low').mul(pl.col('adj_factor')).alias('adj_low'),
-        pl.col('close').mul(pl.col('adj_factor')).alias('adj_close'),
-    )
-    df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
     return df
 
 
@@ -299,48 +257,3 @@ def download_lag_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
     return df_lag
 
     
-def download_stock_tick(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Download all stock tick (snapshot) bars.
-
-    Args:
-        begin (Datetime): begin date.
-        end (Datetime): end date.
-
-    Raises:
-        ImportError: Error: module datareader not found
-
-    Returns:
-        pl.DataFrame: _description_
-    """
-    with DatareaderContext() as dr:
-        df: pl.DataFrame = dr.read(
-            dr.meta.StockSnapshot(),
-            begin=begin,
-            end=end,
-            df_lib="polars",
-            categorical_symbol=True,
-        )
-    return df
-
-def download_barra(begin: Datetime, end: Datetime) -> pl.DataFrame:
-    """Download daily barra style and industry factors.
-
-    Args:
-        begin (Datetime): begin date.
-        end (Datetime): end date.
-
-    Raises:
-        ImportError: Error: module datareader not found
-
-    Returns:
-        pl.DataFrame: _description_
-    """
-    with DatareaderContext() as dr:
-        df: pl.DataFrame = dr.read(
-            dr.meta.StockBarraFactor(abbr=True, wide=True, ignore_country=True),
-            begin=begin,
-            end=end,
-            df_lib="polars",
-            categorical_symbol=True,
-        )
-    return df
