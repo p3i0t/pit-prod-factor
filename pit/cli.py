@@ -57,7 +57,7 @@ DateType = ExtendedDate()
 class TaskNotSupportedError(Exception):
     ...
 
-def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True, ray_kwargs: dict = {}):
+def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True):
     if task_name not in tasks_dict:
         click.echo(f"task {task_name} is not supported.")
         raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
@@ -111,43 +111,79 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
 
 
     if task_name == "bar_1m":
-        # fetch data in parallel on a daily basis since data is large.
-        import ray
-        n_jobs = ray_kwargs.get('n_jobs', 10)
-        memory_per_task = ray_kwargs.get('memory_per_task', 8)
-        
-        ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
-        @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
-        def remote_download(begin, end) -> None:
-            df = tasks_dict[task_name](begin, end)
+        import multiprocessing
+        from functools import partial
+        def _download_single_date(
+            # *, 
+            task_name: str, 
+            tasks_dict: dict, 
+            item_dir: str,
+            verbose: bool,
+            _date: str
+        ) -> str | None:
+            df = tasks_dict[task_name](_date, _date)
             if df.is_empty():
                 if verbose is True:
-                    click.echo(f"task {begin} is empty.")
+                    click.echo(f"task {_date} is empty.")
                 return
-            res_list = []
-            for d, _df in df.partition_by(["date"], as_dict=True).items():
-                # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-                if verbose is True:
-                    click.echo(f"task {d:%Y-%m-%d} done.")
-                _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-                res_list.append(d)
+            df.write_parquet(f"{item_dir}/{_date:%Y-%m-%d}.parq")
+            return _date
 
-        task_ids = []
-        n_task_finished = 0
-        for exp_id, d in enumerate(left_dates, 1):
-            task_id = remote_download.options(
-                name="x",
-                num_cpus=1,
-            ).remote(begin=d, end=d)
-            task_ids.append(task_id)
+                
+        def process_dates(task_name, tasks_dict, item_dir, verbose, left_dates, n_jobs):
+            with multiprocessing.Pool(processes=n_jobs, maxtasksperchild=5) as pool:
+                func = partial(_download_single_date, 
+                               task_name, tasks_dict, item_dir, verbose)
+                results = pool.map(func, left_dates)
+            
+            return results
+        
+        process_dates(task_name, tasks_dict, item_dir, verbose, left_dates, n_jobs=10)
+            # n_task_finished = 0
+            # for result in results:
+            #     if result is not None:
+            #         n_task_finished += len(result)
+            #         if verbose and n_task_finished % 10 == 0:
+            #             click.echo(f"{n_task_finished} tasks finished.")
 
-            if len(task_ids) >= n_jobs:
-                dones, task_ids = ray.wait(task_ids, num_returns=1)
-                ray.get(dones)
-                n_task_finished += 1
-                if verbose is True and n_task_finished % 10 == 0:
-                    click.echo(f"{n_task_finished} tasks finished.")
-        ray.get(task_ids)
+            # return n_task_finished
+        # fetch data in parallel on a daily basis since data is large.
+        # import ray
+        # n_jobs = ray_kwargs.get('n_jobs', 10)
+        # memory_per_task = ray_kwargs.get('memory_per_task', 8)
+        
+        # ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
+        # @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
+        # def remote_download(begin, end) -> None:
+        #     df = tasks_dict[task_name](begin, end)
+        #     if df.is_empty():
+        #         if verbose is True:
+        #             click.echo(f"task {begin} is empty.")
+        #         return
+        #     res_list = []
+        #     for d, _df in df.partition_by(["date"], as_dict=True).items():
+        #         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+        #         if verbose is True:
+        #             click.echo(f"task {d:%Y-%m-%d} done.")
+        #         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+        #         res_list.append(d)
+
+        # task_ids = []
+        # n_task_finished = 0
+        # for exp_id, d in enumerate(left_dates, 1):
+        #     task_id = remote_download.options(
+        #         name="x",
+        #         num_cpus=1,
+        #     ).remote(begin=d, end=d)
+        #     task_ids.append(task_id)
+
+        #     if len(task_ids) >= n_jobs:
+        #         dones, task_ids = ray.wait(task_ids, num_returns=1)
+        #         ray.get(dones)
+        #         n_task_finished += 1
+        #         if verbose is True and n_task_finished % 10 == 0:
+        #             click.echo(f"{n_task_finished} tasks finished.")
+        # ray.get(task_ids)
 
         click.echo(f"{len(left_dates)} tasks done.")
     else:
@@ -193,66 +229,6 @@ def download(begin, end, task_name, verbose):
     
     for task in tasks:
         _run_download_for_one_task(begin, end, task, verbose=verbose)
-    
-
-@click.command()
-@click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
-@click.option(
-    "--cpu_per_task", "n_cpu", default=4, type=int, help="number of cpus per task."
-)
-@click.option("--verbose", "-v", is_flag=True, help="whether to print progress.")
-def downsample10(n_jobs, n_cpu, verbose):
-    """Downsample 1m to 10m."""
-    import glob
-
-    cfg = read_config()
-    src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
-    tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
-    from pit.downsample import downsample_1m_to_10m
-
-    if verbose is True:
-        click.echo(f"downsample from {src_dir} to {tgt_dir}")
-    Path(tgt_dir).mkdir(parents=True, exist_ok=True)
-    import re
-
-    import ray
-
-    @ray.remote(max_calls=3)
-    def _downsample(file):
-        bars = get_bars("v3")
-        downsample_1m_to_10m(
-            pl.scan_parquet(f"{src_dir}/{file}"), bars=bars
-        ).write_parquet(f"{tgt_dir}/{file}")
-        return file
-
-    src_files = set(glob.glob(f"{src_dir}/*.parq"))
-    tgt_files = set(glob.glob(f"{tgt_dir}/*.parq"))
-
-    src_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in src_files])
-    tgt_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in tgt_files])
-    left_dates = sorted(src_dates - tgt_dates)
-    click.echo(f"{len(left_dates)} downsample tasks to be done.")
-    left_files = [f"{d}.parq" for d in left_dates]
-
-    task_ids = []
-    n_task_finished = 0
-    for exp_id, file in enumerate(left_files, 1):
-        if verbose is True:
-            click.echo(f"running on {file}")
-        task_id = _downsample.options(
-            name="x",
-            num_cpus=n_cpu,
-        ).remote(file=file)
-        task_ids.append(task_id)
-
-        if len(task_ids) >= n_jobs:
-            dones, task_ids = ray.wait(task_ids, num_returns=1)
-            ray.get(dones)
-            n_task_finished += 1
-            if verbose is True and n_task_finished % 10 == 0:
-                click.echo(f"{n_task_finished} tasks finished.")
-    ray.get(task_ids)
-    click.echo("task downsample done.")
 
 
 @click.command()
