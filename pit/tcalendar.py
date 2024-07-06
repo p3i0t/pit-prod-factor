@@ -1,11 +1,9 @@
 import bisect
 import datetime
-import os
 from typing import Literal, Optional, Tuple, TypeAlias
 
 import polars as pl
 
-from pit.config import read_config
 from pit.utils import Datetime, any2ymd
 
 __all__ = ['get_trading_slots', "is_trading_day", "get_tcalendar_df", "adjust_date", "adjust_tcalendar_slot_df"]
@@ -600,8 +598,9 @@ def compute_gap_days_and_end_slot(slot: str, duration: str) -> Tuple[int, str]:
     return n_days, end
     
 
-def load_tcalendar_list(begin: str = '2010-01-01', end: str = None) -> list[str]:
+def load_tcalendar_list(begin = "2010-01-01", end = None) -> list[str]:
     import genutils as gu
+    _begin = any2ymd(begin) if begin else '2010-01-01'
     _end = any2ymd(end) if end else any2ymd(last_day_of_year()) 
     _dates: list[datetime.date] = gu.tcalendar.get(begin, end, df_lib="polars")
     return [_date.strftime("%Y-%m-%d") for _date in _dates]

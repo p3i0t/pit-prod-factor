@@ -19,7 +19,6 @@ from pit.download import (
     download_lag_return,
     download_return,
     download_stock_minute,
-    download_tcalendar,
     download_universe,
 )
 from pit.tcalendar import (
@@ -361,8 +360,9 @@ def train_single(prod, milestone, universe):
 @click.option(
     "--universe", "-u", default="euniv_largemid", help="universe name."
 )
+@click.option("--out-dir", "-o", default=None, help="output directory.")
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
-def infer_online(prod, date, n_latest, universe, verbose):
+def infer_online(prod, date, n_latest, universe, out_dir, verbose):
     """Online inference on single date.
 
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -413,7 +413,10 @@ def infer_online(prod, date, n_latest, universe, verbose):
         click.echo(f"infer on {args.universe}, {len(o)} symbols, {n_valid_values} real valid values.")
         
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
-    o.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
+
+    out_dir = Path(out_dir) if out_dir else tgt_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    o.write_parquet(out_dir.joinpath(f"{use_date}.parq"))
 
 
 @click.command()
