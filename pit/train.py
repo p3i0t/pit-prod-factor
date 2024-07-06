@@ -1,18 +1,22 @@
 from datetime import datetime
 from time import perf_counter
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import numpy as np
-from loguru import logger
 import polars as pl
 import torch
-from dlkit.preprocessing import DataFrameNormalizer, StandardScaler, CrossSectionalScaler
-from dlkit.train import StockTrainer, TrainArguments
 from dlkit.data import StockDataset
-from dlkit.utils import CHECHPOINT_META
+from dlkit.preprocessing import (
+    CrossSectionalScaler,
+    DataFrameNormalizer,
+    StandardScaler,
+)
+from dlkit.train import StockTrainer, TrainArguments
+from loguru import logger
 
+# from dlkit.utils import CHECHPOINT_META
 from pit.datasource import OfflineDataSource
-from pit.utils import any2date
+from pit.utils import EncryptedCheckpointSaver, any2date
 
 train_logger = logger.bind(where="train_pipeline")
 
@@ -49,6 +53,7 @@ class TrainPipeline:
         )
         self.normalizer = get_normalizer(name=args.normalizer)
         self.debug = debug
+        
 
     
     def split_data(self) -> Tuple[pl.DataFrame, pl.DataFrame, Optional[pl.DataFrame]]:
@@ -139,7 +144,18 @@ class TrainPipeline:
             train_logger.info("start training.")
             trainer.train()
             train_logger.info("training done.")
-            checkpoint_dir = f"{self.args.milestone_dir}/{CHECHPOINT_META.prefix_dir}"
-            torch.save(self.normalizer, f"{checkpoint_dir}/{CHECHPOINT_META.normalizer}")
+            
+            ckpt = {
+                'model': trainer.model.state_dict(),
+                'normalizer': self.normalizer,
+                'train_args': self.args,
+            }
+            saver = EncryptedCheckpointSaver()
+            
+            saver.save_encrypted_checkpoint(
+                checkpoint=ckpt, 
+                filename=f"{self.args.milestone_dir}/checkpoint.pth") 
+            # checkpoint_dir = f"{self.args.milestone_dir}/{CHECHPOINT_META.prefix_dir}"
+            # torch.save(self.normalizer, f"{checkpoint_dir}/{CHECHPOINT_META.normalizer}")
         else:
             raise ValueError("train_set and eval_set must not be None.")

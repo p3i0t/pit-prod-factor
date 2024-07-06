@@ -4,4 +4,5 @@ from pit.prod import get_training_config, get_inference_config, ProdsAvailable, 
 from pit.train import TrainPipeline  # noqa
 from pit.inference import InferencePipeline  # noqa
 
-__version__ = "0.6.66"
+import datetime
+__version__ = datetime.datetime.now().strftime("%Y.%m.%d")

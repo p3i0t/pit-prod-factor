@@ -9,6 +9,7 @@ from loguru import logger
 from pit import (
     InferencePipeline,
     TrainPipeline,
+    __version__,
     get_bars,
     get_inference_config,
     get_training_config,
@@ -19,7 +20,6 @@ from pit.download import (
     download_lag_return,
     download_return,
     download_stock_minute,
-    download_tcalendar,
     download_universe,
 )
 from pit.tcalendar import (
@@ -57,7 +57,26 @@ DateType = ExtendedDate()
 class TaskNotSupportedError(Exception):
     ...
 
-def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True):
+
+def _download_single_date_bar_1m(
+    # *, 
+    task_name: str, 
+    tasks_dict: dict, 
+    item_dir: str,
+    verbose: bool,
+    _date: str
+) -> str | None:
+    "keep it as a simple python function."
+    df = tasks_dict[task_name](_date, _date)
+    if df.is_empty():
+        if verbose is True:
+            click.echo(f"task {_date} is empty.")
+        return
+    df.write_parquet(f"{item_dir}/{_date}.parq")
+    return _date
+
+
+def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True, n_jobs: int = 10, cpus_per_task: int = 2):
     if task_name not in tasks_dict:
         click.echo(f"task {task_name} is not supported.")
         raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
@@ -111,79 +130,26 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True)
 
 
     if task_name == "bar_1m":
-        import multiprocessing
-        from functools import partial
-        def _download_single_date(
-            # *, 
-            task_name: str, 
-            tasks_dict: dict, 
-            item_dir: str,
-            verbose: bool,
-            _date: str
-        ) -> str | None:
-            df = tasks_dict[task_name](_date, _date)
-            if df.is_empty():
-                if verbose is True:
-                    click.echo(f"task {_date} is empty.")
-                return
-            df.write_parquet(f"{item_dir}/{_date:%Y-%m-%d}.parq")
-            return _date
-
-                
-        def process_dates(task_name, tasks_dict, item_dir, verbose, left_dates, n_jobs):
-            with multiprocessing.Pool(processes=n_jobs, maxtasksperchild=5) as pool:
-                func = partial(_download_single_date, 
-                               task_name, tasks_dict, item_dir, verbose)
-                results = pool.map(func, left_dates)
-            
-            return results
-        
-        process_dates(task_name, tasks_dict, item_dir, verbose, left_dates, n_jobs=10)
-            # n_task_finished = 0
-            # for result in results:
-            #     if result is not None:
-            #         n_task_finished += len(result)
-            #         if verbose and n_task_finished % 10 == 0:
-            #             click.echo(f"{n_task_finished} tasks finished.")
-
-            # return n_task_finished
         # fetch data in parallel on a daily basis since data is large.
-        # import ray
+        import ray
         # n_jobs = ray_kwargs.get('n_jobs', 10)
         # memory_per_task = ray_kwargs.get('memory_per_task', 8)
-        
-        # ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
-        # @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
-        # def remote_download(begin, end) -> None:
-        #     df = tasks_dict[task_name](begin, end)
-        #     if df.is_empty():
-        #         if verbose is True:
-        #             click.echo(f"task {begin} is empty.")
-        #         return
-        #     res_list = []
-        #     for d, _df in df.partition_by(["date"], as_dict=True).items():
-        #         # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
-        #         if verbose is True:
-        #             click.echo(f"task {d:%Y-%m-%d} done.")
-        #         _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
-        #         res_list.append(d)
+        task_ids = []
+        n_task_finished = 0
+        for exp_id, d in enumerate(left_dates, 1):
+            task_id = ray.remote(
+                _download_single_date_bar_1m
+                ).options(name="x", num_cpus=1).remote(
+                task_name, tasks_dict, str(item_dir), verbose, d)
+            task_ids.append(task_id)
 
-        # task_ids = []
-        # n_task_finished = 0
-        # for exp_id, d in enumerate(left_dates, 1):
-        #     task_id = remote_download.options(
-        #         name="x",
-        #         num_cpus=1,
-        #     ).remote(begin=d, end=d)
-        #     task_ids.append(task_id)
-
-        #     if len(task_ids) >= n_jobs:
-        #         dones, task_ids = ray.wait(task_ids, num_returns=1)
-        #         ray.get(dones)
-        #         n_task_finished += 1
-        #         if verbose is True and n_task_finished % 10 == 0:
-        #             click.echo(f"{n_task_finished} tasks finished.")
-        # ray.get(task_ids)
+            if len(task_ids) >= n_jobs:
+                dones, task_ids = ray.wait(task_ids, num_returns=1)
+                ray.get(dones)
+                n_task_finished += 1
+                if verbose is True and n_task_finished % 10 == 0:
+                    click.echo(f"{n_task_finished} tasks finished.")
+        ray.get(task_ids)
 
         click.echo(f"{len(left_dates)} tasks done.")
     else:
@@ -218,7 +184,13 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True)
     type=click.Choice(["return", "lag_return", "univ", "bar_1m", "all"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
-def download(begin, end, task_name, verbose):
+@click.option(
+    "--n_jobs", default=20, type=int, help="number of parallel jobs are most (for bar_1m only)."
+)
+@click.option(
+    "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task (for bar_1m only)."
+)
+def download(begin, end, task_name, verbose, n_jobs, n_cpu):
     if task_name == "all":
         tasks = list(tasks_dict.keys())
     else:
@@ -228,7 +200,9 @@ def download(begin, end, task_name, verbose):
         tasks = [task_name]
     
     for task in tasks:
-        _run_download_for_one_task(begin, end, task, verbose=verbose)
+        click.echo(f"\U0001F680 {task=}.")
+        _run_download_for_one_task(
+            begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
 
 
 @click.command()
@@ -331,20 +305,20 @@ def generate_dataset(n_jobs, n_cpu):
     ray.get(task_ids)
 
 
-@click.command()
-@click.option(
-    "--verbose", "-v", is_flag=True, help="whether to print more information."
-)
-def update_tcalendar(verbose):
-    """Update trading calendar."""
-    cfg = read_config()
-    tclendar_series = download_tcalendar()
-    if verbose:
-        click.echo(f"Updating calendar to {cfg.tcalendar_path}")
-        click.echo(
-            f"{len(tclendar_series)} dates from {tclendar_series[0]} to {tclendar_series[-1]}."
-        )
-    tclendar_series.to_frame().write_csv(cfg.tcalendar_path)
+# @click.command()
+# @click.option(
+#     "--verbose", "-v", is_flag=True, help="whether to print more information."
+# )
+# def update_tcalendar(verbose):
+#     """Update trading calendar."""
+#     cfg = read_config()
+#     tclendar_series = download_tcalendar()
+#     if verbose:
+#         click.echo(f"Updating calendar to {cfg.tcalendar_path}")
+#         click.echo(
+#             f"{len(tclendar_series)} dates from {tclendar_series[0]} to {tclendar_series[-1]}."
+#         )
+#     tclendar_series.to_frame().write_csv(cfg.tcalendar_path)
 
 
 @click.command()
@@ -387,8 +361,9 @@ def train_single(prod, milestone, universe):
 @click.option(
     "--universe", "-u", default="euniv_largemid", help="universe name."
 )
+@click.option("--out-dir", "-o", default=None, help="output directory.")
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
-def infer_online(prod, date, n_latest, universe, verbose):
+def infer_online(prod, date, n_latest, universe, out_dir, verbose):
     """Online inference on single date.
 
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -439,7 +414,10 @@ def infer_online(prod, date, n_latest, universe, verbose):
         click.echo(f"infer on {args.universe}, {len(o)} symbols, {n_valid_values} real valid values.")
         
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
-    o.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
+
+    out_dir = Path(out_dir) if out_dir else tgt_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    o.write_parquet(out_dir.joinpath(f"{use_date}.parq"))
 
 
 @click.command()
@@ -533,10 +511,14 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
-@click.group()
-def pit():
-    """pit: Alpha Signals Generator of Pit."""
-    ...
+@click.group(invoke_without_command=True)
+@click.pass_context
+@click.version_option(version=__version__, message="%(version)s")
+def pit(ctx):
+    """Pit: Alpha Signals Generator of Pit."""
+    if ctx.invoked_subcommand is None:
+        click.echo(f"Pit Version: {__version__}")
+        click.echo("No command was invoked. Use --help for more information.")
 
 
 pit.add_command(train_single)
@@ -544,7 +526,7 @@ pit.add_command(download)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
-pit.add_command(update_tcalendar)
+
 
 if __name__ == "__main__":
     pit()

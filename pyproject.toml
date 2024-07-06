@@ -1,18 +1,15 @@
 [build-system]
-requires = ["poetry-core"]
+requires = [ "poetry-core",]
 
 [tool.poetry]
 name = "pit"
-
-
-version = "0.6.66"
+version = "2024.07.06"
 description = "Pit is a Python ML toolkit."
-authors = ["pit <pit@gmail.com>"]
+authors = [ "pit <pit@gmail.com>",]
 readme = "README.md"
 license = "MIT"
-packages = [
-    {include = "pit"}
-]
+[[tool.poetry.packages]]
+include = "pit"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -21,19 +18,15 @@ einops = "^0.7.0"
 polars = "^0.20.31"
 omegaconf = "^2.3.0"
 loguru = "^0.7.2"
-# torch = "^2.2.0"
 python-dateutil = "^2.8.2"
 numpy = "^1.26.4"
 pydantic = "^2.6.0"
 ray = "^2.9.3"
 torch = "^2.3.1"
 
+[tool.poetry.scripts]
+pit = "pit.cli:pit"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.4"
 nox = "^2023.4.22"
-
-
-[tool.poetry.scripts]
-pit = "pit.cli:pit"
-
