@@ -9,6 +9,7 @@ from loguru import logger
 from pit import (
     InferencePipeline,
     TrainPipeline,
+    __version__,
     get_bars,
     get_inference_config,
     get_training_config,
@@ -510,10 +511,14 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
-@click.group()
-def pit():
-    """pit: Alpha Signals Generator of Pit."""
-    ...
+@click.group(invoke_without_command=True)
+@click.pass_context
+@click.version_option(version=__version__, message="%(version)s")
+def pit(ctx):
+    """Pit: Alpha Signals Generator of Pit."""
+    if ctx.invoked_subcommand is None:
+        click.echo(f"Pit Version: {__version__}")
+        click.echo("No command was invoked. Use --help for more information.")
 
 
 pit.add_command(train_single)
