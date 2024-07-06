@@ -139,7 +139,7 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
         for exp_id, d in enumerate(left_dates, 1):
             task_id = ray.remote(
                 _download_single_date_bar_1m
-                ).options(name="x", num_cpus=1).remote(
+                ).options(name="x", num_cpus=cpus_per_task).remote(
                 task_name, tasks_dict, str(item_dir), verbose, d)
             task_ids.append(task_id)
 
@@ -185,12 +185,13 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 @click.option(
-    "--n_jobs", default=20, type=int, help="number of parallel jobs are most (for bar_1m only)."
+    "--n_jobs", default=10, type=int, help="num of jobs in parallel (for bar_1m only), defaults to 10."
 )
 @click.option(
-    "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task (for bar_1m only)."
+    "--cpu_per_task", "n_cpu", default=2, type=int, help="num of cpus per task (for bar_1m only), defaults to 2."
 )
 def download(begin, end, task_name, verbose, n_jobs, n_cpu):
+    """Download data via datareader."""
     if task_name == "all":
         tasks = list(tasks_dict.keys())
     else:
@@ -205,14 +206,7 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
             begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
 
 
-@click.command()
-@click.option(
-    "--n_jobs", default=20, type=int, help="number of parallel jobs are most."
-)
-@click.option(
-    "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task."
-)
-def generate_dataset(n_jobs, n_cpu):
+def _merge_single_date(_date):
     cfg = read_config()
     dir_1m = Path(cfg.raw.dir).joinpath('bar_1m')
     dir_univ = Path(cfg.raw.dir).joinpath('univ')
@@ -220,11 +214,10 @@ def generate_dataset(n_jobs, n_cpu):
     dir_lag_ret = Path(cfg.raw.dir).joinpath('lag_return')
 
     tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
+    if not tgt_dir.exists():
+        tgt_dir.mkdir(parents=True, exist_ok=True)
     import itertools
-    import re
-    from collections import defaultdict
 
-    import ray
     from dlkit.utils import get_time_slots
 
     from pit.downsample import downsample_1m_to_10m
@@ -235,66 +228,81 @@ def generate_dataset(n_jobs, n_cpu):
         f"{_b}_{_agg}" for _b, _agg in itertools.product(bars, ["mean", "std"])
     ]
     v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
+    
+    with pl.StringCache():
+        # s, t = min(dates), max(dates)
+        # exists = [file for file in os.listdir(tgt_dir) if file.startswith(month)]
 
-    src_files = (
-        set(os.listdir(dir_1m)) & set(os.listdir(dir_univ)) & set(os.listdir(dir_ret))
-    )
-    src_dates = [re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in sorted(src_files)[:-6]]
+        # if len(exists) == 0:
+        #     # df_cur = pl.DataFrame()  # empty df
+        #     pass
+        # elif len(exists) == 1:
+        #     cur_s, cur_t = re.findall(r"\d{4}-\d{2}-\d{2}", exists[0])
+        #     if all(cur_s <= _d <= cur_t for _d in dates):
+        #         return  # already merged
+        #     else:
+        #         os.remove(f"{tgt_dir}/{exists[0]}")
+        #         logger.info(f"remove {tgt_dir}/{exists[0]}")
+        # else:
+        #     for _file in exists:
+        #         os.remove(f"{tgt_dir}/{_file}")
+        #         logger.info(f"remove {tgt_dir}/{_file}")
+            # raise ValueError(f"multiple files found for {month}")
 
-    monthly_groups = defaultdict(list)
-    for _date in src_dates:
-        monthly_groups[re.findall(r"\d{4}-\d{2}", _date)[0]].append(_date)
+        # df_list = []
+        # for _d in dates:
+            df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
+            bars = get_bars("v2")
+            df_10m = downsample_1m_to_10m(
+                pl.scan_parquet(f"{dir_1m}/{_date}.parq"), bars=bars
+            )
+            df_10m = df_10m.select(["date", "symbol"] + v2_cols)
+            df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
+            df_ret = pl.scan_parquet(f"{dir_ret}/{_date}.parq").collect()
+            df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_date}.parq").collect()
+            df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
+            df = df.join(df_ret, on=["date", "symbol"], how="left")
+            df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
+            df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
+            df.write_parquet(f"{tgt_dir}/{_date}.parq")
 
-    @ray.remote(max_calls=3)
-    def _merge(month, dates):
-        with pl.StringCache():
-            s, t = min(dates), max(dates)
-            exists = [file for file in os.listdir(tgt_dir) if file.startswith(month)]
 
-            if len(exists) == 0:
-                # df_cur = pl.DataFrame()  # empty df
-                pass
-            elif len(exists) == 1:
-                cur_s, cur_t = re.findall(r"\d{4}-\d{2}-\d{2}", exists[0])
-                if all(cur_s <= _d <= cur_t for _d in dates):
-                    return  # already merged
-                else:
-                    os.remove(f"{tgt_dir}/{exists[0]}")
-                    logger.info(f"remove {tgt_dir}/{exists[0]}")
-            else:
-                for _file in exists:
-                    os.remove(f"{tgt_dir}/{_file}")
-                    logger.info(f"remove {tgt_dir}/{_file}")
-                # raise ValueError(f"multiple files found for {month}")
+@click.command()
+@click.option(
+    "--n_jobs", default=10, type=int, help="num of parallel jobs, defaults to 10."
+)
+@click.option(
+    "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task, defaults to 2."
+)
+def generate_dataset(n_jobs, n_cpu):
+    """Generate dataset from downloaded raw data."""
+    cfg = read_config()
+    dir_1m = Path(cfg.raw.dir).joinpath('bar_1m')
+    dir_univ = Path(cfg.raw.dir).joinpath('univ')
+    dir_ret = Path(cfg.raw.dir).joinpath('return')
+    dir_lag_ret = Path(cfg.raw.dir).joinpath('lag_return')
 
-            df_list = []
-            for _d in dates:
-                df_univ = pl.scan_parquet(f"{dir_univ}/{_d}.parq").collect()
-                bars = get_bars("v2")
-                df_10m = downsample_1m_to_10m(
-                    pl.scan_parquet(f"{dir_1m}/{_d}.parq"), bars=bars
-                )
-                df_10m = df_10m.select(["date", "symbol"] + v2_cols)
-                df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
-                df_ret = pl.scan_parquet(f"{dir_ret}/{_d}.parq").collect()
-                df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_d}.parq").collect()
-                df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
-                df = df.join(df_ret, on=["date", "symbol"], how="left")
-                df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
-                df_list.append(df)
-            df_final = pl.concat(df_list)
-            cols = df_final.select(pl.col(pl.Float64)).columns
-            df_final = df_final.with_columns(pl.col(c).cast(pl.Float32) for c in cols)
-            df_final.write_parquet(f"{tgt_dir}/{s}_{t}.parq")
-        return month
+    # tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
+
+    import glob
+
+    import ray
+    dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
+    dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
+    dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
+    dates_lag_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_lag_ret, "*.parq"))]
+
+    src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
+    # always drop 6 recent dates to avoid incomplete data.
+    src_dates = sorted(src_dates)[:-6]
 
     task_ids = []
     n_task_finished = 0
-    for _month, _dates in monthly_groups.items():
-        task_id = _merge.options(
+    for _date in src_dates:
+        task_id = ray.remote(_merge_single_date).options(
             name="x",
             num_cpus=n_cpu,
-        ).remote(month=_month, dates=_dates)
+        ).remote(_date)
         task_ids.append(task_id)
 
         if len(task_ids) >= n_jobs:
@@ -305,38 +313,22 @@ def generate_dataset(n_jobs, n_cpu):
     ray.get(task_ids)
 
 
-# @click.command()
-# @click.option(
-#     "--verbose", "-v", is_flag=True, help="whether to print more information."
-# )
-# def update_tcalendar(verbose):
-#     """Update trading calendar."""
-#     cfg = read_config()
-#     tclendar_series = download_tcalendar()
-#     if verbose:
-#         click.echo(f"Updating calendar to {cfg.tcalendar_path}")
-#         click.echo(
-#             f"{len(tclendar_series)} dates from {tclendar_series[0]} to {tclendar_series[-1]}."
-#         )
-#     tclendar_series.to_frame().write_csv(cfg.tcalendar_path)
-
-
 @click.command()
 @click.option(
     "--prod",
     "-p",
     default="1030",
     type=click.Choice(list_prods()),
-    help="product name.",
+    help="product name, defaults to `1030`.",
 )
 @click.option(
     "--milestone",
     "-m",
     type=DateType,
     default="today",
-    help="milestone date of the model to train.",
+    help="milestone date of the model to train, defaults to `today`.",
 )
-@click.option("--universe", "-u", default="euniv_largemid", help="universe name.")
+@click.option("--universe", "-u", default="euniv_largemid", help="universe name, defaults to `euniv_largemid`.")
 def train_single(prod, milestone, universe):
     """Train single model of given prod and milestone."""
     args = get_training_config(prod=prod, milestone=milestone, universe=universe)
@@ -350,16 +342,16 @@ def train_single(prod, milestone, universe):
     "-p",
     default="1030",
     type=click.Choice(list_prods()),
-    help="product name.",
+    help="product name, defaults to `1030`.",
 )
 @click.option(
-    "--date", "-d", default="today", help="the date of data used for inference."
+    "--date", "-d", default="today", help="the date of data used for inference, defaults to `today`."
 )
 @click.option(
-    "--n_latest", default=1, type=int, help="number of latest models to use."
+    "--n_latest", default=1, type=int, help="number of latest models to use, defaults to 1."
 )
 @click.option(
-    "--universe", "-u", default="euniv_largemid", help="universe name."
+    "--universe", "-u", default="euniv_largemid", help="universe name, defaults to `euniv_largemid`."
 )
 @click.option("--out-dir", "-o", default=None, help="output directory.")
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
