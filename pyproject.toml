@@ -23,15 +23,7 @@ numpy = "^1.26.4"
 pydantic = "^2.6.0"
 ray = "^2.9.3"
 torch = "^2.3.1"
-<<<<<<< HEAD
-=======
 
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.4"
-nox = "^2023.4.22"
-
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 [tool.poetry.scripts]
 pit = "pit.cli:pit"

@@ -22,11 +22,6 @@ def read_config():
     PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
     default_config = {
         "pit_dir": PIT_DIR,
-<<<<<<< HEAD
-        # "tcalendar_path": "${pit_dir}/tcalendar.csv",
-=======
-        "tcalendar_path": "${pit_dir}/tcalendar.csv",
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
         # all the raw data items
         "raw": {
             "dir": "${pit_dir}/raw", 

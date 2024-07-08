@@ -630,7 +630,6 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
-<<<<<<< HEAD
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.version_option(version=__version__, message="%(version)s")
@@ -639,12 +638,6 @@ def pit(ctx):
     if ctx.invoked_subcommand is None:
         click.echo(f"Pit Version: {__version__}")
         click.echo("No command was invoked. Use --help for more information.")
-=======
-@click.group()
-def pit():
-    """pit: Alpha Signals Generator of Pit."""
-    ...
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 
 pit.add_command(train_single)
@@ -652,11 +645,6 @@ pit.add_command(download)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
-<<<<<<< HEAD
-
-=======
-pit.add_command(update_tcalendar)
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 if __name__ == "__main__":
     pit()

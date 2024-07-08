@@ -3,10 +3,7 @@ from time import perf_counter
 from typing import Optional, Tuple
 
 import numpy as np
-<<<<<<< HEAD
-=======
 from loguru import logger
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 import polars as pl
 import torch
 from dlkit.data import StockDataset
@@ -20,11 +17,7 @@ from loguru import logger
 
 # from dlkit.utils import CHECHPOINT_META
 from pit.datasource import OfflineDataSource
-<<<<<<< HEAD
 from pit.utils import EncryptedCheckpointSaver, any2date
-=======
-from pit.utils import any2date
->>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 train_logger = logger.bind(where="train_pipeline")
 
