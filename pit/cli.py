@@ -1,6 +1,7 @@
 import datetime
 import os
 from pathlib import Path
+from time import perf_counter
 
 import click
 import polars as pl
@@ -200,10 +201,13 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
             raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
         tasks = [task_name]
     
+    s = perf_counter()
     for task in tasks:
         click.echo(f"\U0001F680 {task=}.")
         _run_download_for_one_task(
             begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
+    t = perf_counter() - s
+    click.echo(f"all tasks done in {t:.2f}s.")
 
 
 def _merge_single_date(_date):
@@ -296,6 +300,9 @@ def generate_dataset(n_jobs, n_cpu):
     # always drop 6 recent dates to avoid incomplete data.
     src_dates = sorted(src_dates)[:-6]
 
+    click.echo(f"total {len(src_dates)} tasks (dates) to be merged.")
+    
+    s = perf_counter()
     task_ids = []
     n_task_finished = 0
     for _date in src_dates:
@@ -311,6 +318,8 @@ def generate_dataset(n_jobs, n_cpu):
             n_task_finished += 1
             logger.info(f"{n_task_finished} tasks finished.")
     ray.get(task_ids)
+    t = perf_counter() - s
+    click.echo(f"{len(src_dates)} tasks done in {t:.2f}s.")
 
 
 @click.command()
@@ -331,9 +340,12 @@ def generate_dataset(n_jobs, n_cpu):
 @click.option("--universe", "-u", default="euniv_largemid", help="universe name, defaults to `euniv_largemid`.")
 def train_single(prod, milestone, universe):
     """Train single model of given prod and milestone."""
+    s = perf_counter()
     args = get_training_config(prod=prod, milestone=milestone, universe=universe)
     pipe = TrainPipeline(args)
     pipe.run()
+    t = perf_counter() - s
+    click.echo(f"train {prod} on milestone {milestone} done in {t:.2f}s.")
 
 
 @click.command()
@@ -453,6 +465,7 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     all_dates = [d.split('.')[0] for d in os.listdir(args.dataset_dir)]
     infer_dates = [d for d in all_dates if _begin <= d <= _end]
     
+    s = perf_counter()
     ip = InferencePipeline(args=args)
 
     with pl.StringCache():
@@ -501,13 +514,15 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     out_dir = Path(out_dir) if out_dir else tgt_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
+    t = perf_counter() - s
+    click.echo(f"Inference on {args.universe} done in {t:.2f}s.")
 
 
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.version_option(version=__version__, message="%(version)s")
 def pit(ctx):
-    """Pit: Alpha Signals Generator of Pit."""
+    """Generator of Alpha Signal Pit."""
     if ctx.invoked_subcommand is None:
         click.echo(f"Pit Version: {__version__}")
         click.echo("No command was invoked. Use --help for more information.")
