@@ -5,21 +5,22 @@ from collections import defaultdict
 from copy import deepcopy
 from enum import Enum
 from time import perf_counter
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import polars as pl
 import torch
-from loguru import logger
-
 from dlkit.inference import InferenceArguments
 from dlkit.models import get_model
 from dlkit.preprocessing import DataFrameNormalizer
-from dlkit.utils import CHECHPOINT_META
+from loguru import logger
+
+# from dlkit.utils import CHECHPOINT_META
 from pit.datasource import (
     OfflineDataSource,
     OnlineV2DownsampleDataSource,
 )
+from pit.utils import EncryptedCheckpointSaver
 
 logger = logger.bind(where="inference")
 
@@ -33,6 +34,7 @@ class InferencePipeline:
     def __init__(self, args: InferenceArguments):
         self.args = args
         self.models_available = sorted(os.listdir(f"{args.save_dir}/{args.prod}"))
+        self.enc_ckpt_saver = EncryptedCheckpointSaver()
         self.model_cache = {}
 
     def _load_ckpt(self, ckpt_dir: str) -> Tuple[torch.nn.Module, DataFrameNormalizer]:
@@ -48,8 +50,10 @@ class InferencePipeline:
         model = get_model(
             name=self.args.model, d_in=self.args.d_in, d_out=self.args.d_out
         )
-        model.load_state_dict(torch.load(f"{ckpt_dir}/model.pt"))
-        normalizer = torch.load(f"{ckpt_dir}/normalizer.pt")
+        
+        ckpt = self.enc_ckpt_saver.load_encrypted_checkpoint(f"{ckpt_dir}/checkpoint.pth")
+        model.load_state_dict(ckpt["model"])
+        normalizer = ckpt["normalizer"]
         return model, normalizer
 
     def __call__(
@@ -122,7 +126,7 @@ class InferencePipeline:
 
         pred_list = []
         for model_date in models_required:
-            ckpt_dir = f"{self.args.save_dir}/{self.args.prod}/{model_date}/{CHECHPOINT_META.prefix_dir}"
+            ckpt_dir = f"{self.args.save_dir}/{self.args.prod}/{model_date}"
             if model_date in self.model_cache:
                 _model, _normalizer = self.model_cache[model_date]
             else:

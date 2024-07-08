@@ -14,18 +14,8 @@ pit --help
 
 to get the full command list.
 
+run ``pit --version`` to get the version, i.e. the date of last commit to main branch.
 
-### Update trading calendar
-
-``pit`` maintains a local trading calendar in ``PIT_DIR``, run:
-
-```shell
-pit update-calendar 
-```
-
-to update the calendar, the calendar starts from 2015-01-01, and ends on the last day of this year.
-
-  **Hint: Since the trading calendar is updated in an unpredictable manner due to adjustment of public holidays in China. It is advised to update the calendar every day.**
 
 ### Download data
 

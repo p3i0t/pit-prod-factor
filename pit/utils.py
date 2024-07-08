@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import io
+from functools import lru_cache
 from typing import Annotated, Any, TypeVar
 
 import dateutil.parser
@@ -72,6 +73,7 @@ class EncryptedCheckpointSaver:
         
         return checkpoint
 
+@lru_cache(maxsize=3000)
 def anonymize(s: str) -> str:
     return hashlib.md5(s.encode()).hexdigest()
 
