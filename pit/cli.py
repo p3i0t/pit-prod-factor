@@ -245,6 +245,7 @@ def downsample10(n_jobs, n_cpu, verbose):
     click.echo(f"{len(left_dates)} downsample tasks to be done.")
     left_files = [f"{d}.parq" for d in left_dates]
 
+    s = perf_counter()
     task_ids = []
     n_task_finished = 0
     for exp_id, file in enumerate(left_files, 1):
