@@ -9,7 +9,10 @@ from loguru import logger
 from pit import (
     InferencePipeline,
     TrainPipeline,
+<<<<<<< HEAD
     __version__,
+=======
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
     get_bars,
     get_inference_config,
     get_training_config,
@@ -20,6 +23,10 @@ from pit.download import (
     download_lag_return,
     download_return,
     download_stock_minute,
+<<<<<<< HEAD
+=======
+    download_tcalendar,
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
     download_universe,
 )
 from pit.tcalendar import (
@@ -57,6 +64,7 @@ DateType = ExtendedDate()
 class TaskNotSupportedError(Exception):
     ...
 
+<<<<<<< HEAD
 
 def _download_single_date_bar_1m(
     # *, 
@@ -77,6 +85,9 @@ def _download_single_date_bar_1m(
 
 
 def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True, n_jobs: int = 10, cpus_per_task: int = 2):
+=======
+def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True, ray_kwargs: dict = {}):
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
     if task_name not in tasks_dict:
         click.echo(f"task {task_name} is not supported.")
         raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
@@ -132,6 +143,7 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
     if task_name == "bar_1m":
         # fetch data in parallel on a daily basis since data is large.
         import ray
+<<<<<<< HEAD
         # n_jobs = ray_kwargs.get('n_jobs', 10)
         # memory_per_task = ray_kwargs.get('memory_per_task', 8)
         task_ids = []
@@ -143,6 +155,36 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
                 task_name, tasks_dict, str(item_dir), verbose, d)
             task_ids.append(task_id)
 
+=======
+        n_jobs = ray_kwargs.get('n_jobs', 10)
+        memory_per_task = ray_kwargs.get('memory_per_task', 8)
+        
+        ray.init(num_cpus=n_jobs, ignore_reinit_error=True, include_dashboard=False)
+        @ray.remote(max_calls=1, memory=memory_per_task * 1024 * 1024 * 1024)
+        def remote_download(begin, end) -> None:
+            df = tasks_dict[task_name](begin, end)
+            if df.is_empty():
+                if verbose is True:
+                    click.echo(f"task {begin} is empty.")
+                return
+            res_list = []
+            for d, _df in df.partition_by(["date"], as_dict=True).items():
+                # for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
+                if verbose is True:
+                    click.echo(f"task {d:%Y-%m-%d} done.")
+                _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+                res_list.append(d)
+
+        task_ids = []
+        n_task_finished = 0
+        for exp_id, d in enumerate(left_dates, 1):
+            task_id = remote_download.options(
+                name="x",
+                num_cpus=1,
+            ).remote(begin=d, end=d)
+            task_ids.append(task_id)
+
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
             if len(task_ids) >= n_jobs:
                 dones, task_ids = ray.wait(task_ids, num_returns=1)
                 ray.get(dones)
@@ -184,6 +226,7 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
     type=click.Choice(["return", "lag_return", "univ", "bar_1m", "all"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
+<<<<<<< HEAD
 @click.option(
     "--n_jobs", default=20, type=int, help="number of parallel jobs are most (for bar_1m only)."
 )
@@ -191,6 +234,9 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
     "--cpu_per_task", "n_cpu", default=2, type=int, help="number of cpus per task (for bar_1m only)."
 )
 def download(begin, end, task_name, verbose, n_jobs, n_cpu):
+=======
+def download(begin, end, task_name, verbose):
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
     if task_name == "all":
         tasks = list(tasks_dict.keys())
     else:
@@ -200,9 +246,73 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
         tasks = [task_name]
     
     for task in tasks:
+<<<<<<< HEAD
         click.echo(f"\U0001F680 {task=}.")
         _run_download_for_one_task(
             begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
+=======
+        _run_download_for_one_task(begin, end, task, verbose=verbose)
+    
+
+@click.command()
+@click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
+@click.option(
+    "--cpu_per_task", "n_cpu", default=4, type=int, help="number of cpus per task."
+)
+@click.option("--verbose", "-v", is_flag=True, help="whether to print progress.")
+def downsample10(n_jobs, n_cpu, verbose):
+    """Downsample 1m to 10m."""
+    import glob
+
+    cfg = read_config()
+    src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
+    tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
+    from pit.downsample import downsample_1m_to_10m
+
+    if verbose is True:
+        click.echo(f"downsample from {src_dir} to {tgt_dir}")
+    Path(tgt_dir).mkdir(parents=True, exist_ok=True)
+    import re
+
+    import ray
+
+    @ray.remote(max_calls=3)
+    def _downsample(file):
+        bars = get_bars("v3")
+        downsample_1m_to_10m(
+            pl.scan_parquet(f"{src_dir}/{file}"), bars=bars
+        ).write_parquet(f"{tgt_dir}/{file}")
+        return file
+
+    src_files = set(glob.glob(f"{src_dir}/*.parq"))
+    tgt_files = set(glob.glob(f"{tgt_dir}/*.parq"))
+
+    src_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in src_files])
+    tgt_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in tgt_files])
+    left_dates = sorted(src_dates - tgt_dates)
+    click.echo(f"{len(left_dates)} downsample tasks to be done.")
+    left_files = [f"{d}.parq" for d in left_dates]
+
+    task_ids = []
+    n_task_finished = 0
+    for exp_id, file in enumerate(left_files, 1):
+        if verbose is True:
+            click.echo(f"running on {file}")
+        task_id = _downsample.options(
+            name="x",
+            num_cpus=n_cpu,
+        ).remote(file=file)
+        task_ids.append(task_id)
+
+        if len(task_ids) >= n_jobs:
+            dones, task_ids = ray.wait(task_ids, num_returns=1)
+            ray.get(dones)
+            n_task_finished += 1
+            if verbose is True and n_task_finished % 10 == 0:
+                click.echo(f"{n_task_finished} tasks finished.")
+    ray.get(task_ids)
+    click.echo("task downsample done.")
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 
 @click.command()
@@ -361,9 +471,14 @@ def train_single(prod, milestone, universe):
 @click.option(
     "--universe", "-u", default="euniv_largemid", help="universe name."
 )
+<<<<<<< HEAD
 @click.option("--out-dir", "-o", default=None, help="output directory.")
 @click.option("--verbose", "-v", is_flag=True, help="print more information.")
 def infer_online(prod, date, n_latest, universe, out_dir, verbose):
+=======
+@click.option("--verbose", "-v", is_flag=True, help="print more information.")
+def infer_online(prod, date, n_latest, universe, verbose):
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
     """Online inference on single date.
 
     For prod used at 0930 of next trading day, the date in the result is the next trading day after infer_date.
@@ -414,10 +529,14 @@ def infer_online(prod, date, n_latest, universe, out_dir, verbose):
         click.echo(f"infer on {args.universe}, {len(o)} symbols, {n_valid_values} real valid values.")
         
     use_date = next_date if prod in ["0930", "0930_1h"] else infer_date
+<<<<<<< HEAD
 
     out_dir = Path(out_dir) if out_dir else tgt_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     o.write_parquet(out_dir.joinpath(f"{use_date}.parq"))
+=======
+    o.write_parquet(tgt_dir.joinpath(f"{use_date}.parq"))
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 
 @click.command()
@@ -511,6 +630,7 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
     alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
 
 
+<<<<<<< HEAD
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.version_option(version=__version__, message="%(version)s")
@@ -519,6 +639,12 @@ def pit(ctx):
     if ctx.invoked_subcommand is None:
         click.echo(f"Pit Version: {__version__}")
         click.echo("No command was invoked. Use --help for more information.")
+=======
+@click.group()
+def pit():
+    """pit: Alpha Signals Generator of Pit."""
+    ...
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 
 pit.add_command(train_single)
@@ -526,7 +652,11 @@ pit.add_command(download)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
+<<<<<<< HEAD
 
+=======
+pit.add_command(update_tcalendar)
+>>>>>>> 651ab56a957e35a9512a48e7cfb19fa35a1d2ff8
 
 if __name__ == "__main__":
     pit()
