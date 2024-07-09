@@ -18,13 +18,17 @@ from pit import (
 )
 from pit.config import read_config
 from pit.download import (
+  download_barra,
   download_lag_return,
+  download_ohlcv_minute,
   download_return,
   download_stock_minute,
+  download_stock_tick,
   download_universe,
 )
 from pit.tcalendar import (
   adjust_date,
+  adjust_tcalendar_slot_df,
   get_tcalendar_df,
   is_trading_day,
   load_tcalendar_list,
@@ -37,6 +41,9 @@ tasks_dict = {
   "univ": download_universe,
   "return": download_return,
   "lag_return": download_lag_return,
+  "ohlcv_1m": download_ohlcv_minute,
+  "barra": download_barra,
+  "tick": download_stock_tick
 }
 
 
@@ -136,7 +143,7 @@ def _run_download_for_one_task(
     click.echo(f"{len(existing_dates)} tasks already exist.")
     click.echo(f"{len(left_dates)} tasks to be done.")
 
-  if task_name == "bar_1m":
+  if task_name in ["bar_1m", "tick", "ohlcv_1m"]:
     # fetch data in parallel on a daily basis since data is large.
     import ray
 
@@ -532,7 +539,7 @@ def infer_online(prod, date, n_latest, universe, out_dir, verbose):
 @click.option("--out-dir", "-o", default=None, help="output directory.")
 def infer_hist(prod, begin, end, n_latest, universe, out_dir):
   """Inference on historical data.
-  For prod used at 0930 of next trading day, the date in the result 
+  For prod used at 0930 of next trading day, the date in the result
   is the next trading day after infer_date.
   """
   # from pit.inference import infer, InferenceMode
@@ -595,6 +602,60 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
   alpha.write_parquet(out_dir.joinpath(f"hist_{use_begin}_{use_end}.parq"))
   t = perf_counter() - s
   click.echo(f"Inference on {args.universe} done in {t:.2f}s.")
+
+
+@click.command()
+@click.option(
+  "--duration",
+  default="30m",
+  type=click.Choice(["15m", "30m", "1h", "2h", "1d", "2d", "5d"]),
+)
+def compute_slot_return(duration):
+  """compute returns for 8 intraday slots."""
+  slots = ["0931", "1000", "1030", "1100", "1301", "1330", "1400", "1430"]
+  times = [datetime.time(hour=int(s[:2]), minute=int(s[2:])) for s in slots]
+  cfg = read_config()
+
+  price_dir = os.path.join(cfg.raw.dir, "ohlcv_1m")
+  cols = ["time", "symbol", "adj_close"]
+  pl.enable_string_cache()
+  df_price = pl.scan_parquet(price_dir + "/*.parq").select(cols).collect()
+
+  df_price_left = df_price.filter(pl.col("time").dt.time().is_in(times))
+  df_adj = adjust_tcalendar_slot_df(
+    duration=duration, start_slot=slots
+  )  # two columns: time, next_time
+  end_times = (
+    df_adj.select(pl.col("next_time").dt.time().unique()).to_series().to_list()
+  )
+  df_price_right = df_price.filter(pl.col("time").dt.time().is_in(end_times))
+
+  df_merge = df_price_left.join(df_adj, on="time")
+  df_merge = df_merge.join(
+    df_price_right,
+    left_on=["next_time", "symbol"],
+    right_on=["time", "symbol"],
+    suffix="_right",
+  )
+
+  df_ret = df_merge.select(
+    pl.col("time").cast(pl.Date).alias("date"),
+    pl.col("time"),
+    pl.col("symbol"),
+    pl.col("adj_close_right")
+    .truediv(pl.col("adj_close"))
+    .sub(1)
+    .alias(f"ret_{duration}"),
+  )
+
+  item_dir = os.path.join(cfg.derived.dir, f"ret_{duration}")
+  item_dir = Path(item_dir)
+  item_dir.mkdir(parents=True, exist_ok=True)
+
+  # df_
+  for (d,), _df in df_ret.partition_by(["date"], as_dict=True).items():
+    _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
+  click.echo("task slot return done.")
 
 
 @click.group(invoke_without_command=True)
