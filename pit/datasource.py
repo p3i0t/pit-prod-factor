@@ -6,8 +6,8 @@ import polars as pl
 from dlkit.utils import get_time_slots
 from loguru import logger
 
-from pit import get_bars
 from pit.dr_context import DatareaderContext
+from pit.prod import get_bars
 from pit.tcalendar import _parse_dhm
 from pit.utils import any2date
 
