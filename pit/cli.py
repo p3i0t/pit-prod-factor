@@ -106,7 +106,8 @@ def _run_download_for_one_task(
     _end = any2date(end)
     if verbose is True:
       click.echo(
-        f"end date {end} is trading day and data is available at now (till 2330), adjust to {_end}"
+        f"end date {end} is trading day and data is available at "
+        f"now (till 2330), adjust to {_end}"
       )
   else:
     _end: datetime.date = adjust_date(end, -1)
@@ -122,7 +123,8 @@ def _run_download_for_one_task(
   trading_dates = sorted(load_tcalendar_list(begin=_begin, end=_end))
   if verbose is True:
     click.echo(
-      f"task {task_name}: {len(trading_dates)} jobs from {trading_dates[0]} to {trading_dates[-1]}."
+      f"task {task_name}: {len(trading_dates)} jobs from "
+      f"{trading_dates[0]} to {trading_dates[-1]}."
     )
 
   cfg = read_config()
@@ -194,7 +196,8 @@ def _run_download_for_one_task(
   "-t",
   "task_name",
   default="ohlcv_1m",
-  type=click.Choice(["return", "lag_return", "univ", "bar_1m", "all"]),
+  type=click.Choice(["return", "lag_return", "univ", "bar_1m", 
+                     "tick", "barra", "ohlcv_1m", "all"]),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 @click.option(
