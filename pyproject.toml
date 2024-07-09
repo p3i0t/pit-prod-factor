@@ -3,8 +3,8 @@ requires = [ "poetry-core",]
 
 [tool.poetry]
 name = "pit"
-version = "2024.07.08"
-description = "Pit is a Python ML toolkit."
+version = "2024.07.09"
+description = "pit prod factor."
 authors = [ "pit <pit@gmail.com>",]
 readme = "README.md"
 license = "MIT"
@@ -15,7 +15,7 @@ include = "pit"
 python = "^3.10"
 click = "^8.1"
 einops = "^0.7.0"
-polars = "^0.20.31"
+polars = "^1.1.0"
 omegaconf = "^2.3.0"
 loguru = "^0.7.2"
 python-dateutil = "^2.8.2"

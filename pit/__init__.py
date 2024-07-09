@@ -4,4 +4,4 @@ from pit.prod import get_training_config, get_inference_config, ProdsAvailable, 
 from pit.train import TrainPipeline  # noqa
 from pit.inference import InferencePipeline  # noqa
 
-__version__ = "2024.07.08"
+__version__ = "2024.07.09"

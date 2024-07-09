@@ -155,9 +155,9 @@ def _run_download_for_one_task(begin, end, task_name: str, verbose: bool = True,
         # fetch all in one run since data is small.
         df = tasks_dict[task_name](left_dates[0], left_dates[-1])
         if df.is_empty():
-            click.echo("univ dataframe is empty.")
+            click.echo("dataframe is empty.")
             return
-        for d, _df in df.partition_by(["date"], as_dict=True).items():
+        for (d, ), _df in df.partition_by(["date"], as_dict=True).items():
             _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
         click.echo(f"task {task_name} done.")
 

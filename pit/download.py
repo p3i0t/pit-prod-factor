@@ -60,25 +60,12 @@ def download_universe(begin: Datetime, end: Datetime) -> pl.DataFrame:
     Returns:
         pl.DataFrame: universe.
     """
-    univs = [
-        "univ_research",
-        "univ_largemid",
-        "sz50",
-        "hs300",
-        "zz500",
-        "zz1000",
-        "zz2000",
-        "euniv_largemid",
-        "euniv_research",
-        "euniv_eresearch",
-        "univ_full",
-        "mktcap",
-    ]
+
     with DatareaderContext() as dr:
         df: pl.DataFrame = dr.read(
-            dr.meta.StockUniverse(univs), begin=begin, end=end, df_lib='polars', categorical_symbol=True
+            dr.meta.StockUniverse(), begin=begin, end=end, df_lib='polars', categorical_symbol=True
         )
-    df = df.select(["date", "symbol"] + univs).sort(by=["date", "symbol"])
+    df = df.sort(by=["date", "symbol"])
     return df
 
 
