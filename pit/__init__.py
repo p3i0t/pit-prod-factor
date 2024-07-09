@@ -1,7 +1,12 @@
-"""Pit: A Python package for printing money.
-"""
-from pit.prod import get_training_config, get_inference_config, ProdsAvailable, list_prods, get_bars # noqa
-from pit.train import TrainPipeline  # noqa
 from pit.inference import InferencePipeline  # noqa
+from pit.prod import (
+  ProdsAvailable,
+  get_bars,
+  get_inference_config,
+  get_training_config,
+  list_prods,
+)
 
-__version__ = "2024.07.09"
+from pit.train import TrainPipeline  # noqa
+
+__version__ = "2024.07.10"

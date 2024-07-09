@@ -15,12 +15,15 @@
 #     ext_modules=cythonize(to_compile, compiler_directives={'language_level': '3'}),
 # )
 
-import os
 import fnmatch
+import os
+
+from Cython.Build import cythonize
+
 # NOTE: import setuptools first: https://stackoverflow.com/a/53356077/19204579
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as build_py_orig
-from Cython.Build import cythonize
+
 from pit.__init__ import __version__
 
 # ENCRYPTED = [
@@ -32,32 +35,33 @@ from pit.__init__ import __version__
 # ]
 
 # encrypted = ENCRYPTED
-package_name = 'pit'
+package_name = "pit"
 encrypted = [f.rstrip() for f in os.popen(f'find {package_name} -name "*.py"')]
 # encrypted += [f"{package_name}/configs/config.yaml"]
 # print(encrypted)
+
 
 # NOTE: overwrite build_py to exclude file in bdist:
 # https://github.com/pypa/setuptools/issues/511#issuecomment-570177072
 # https://stackoverflow.com/a/50517893
 class build_py(build_py_orig):
-    def find_package_modules(self, package, package_dir):
-        modules = super().find_package_modules(package, package_dir)
-        return [
-            (pkg, mod, file)
-            for (pkg, mod, file) in modules
-            if file not in encrypted
-            # if not any(fnmatch.fnmatchcase(file, pat=pattern) for pattern in encrypted)
-        ]
+  def find_package_modules(self, package, package_dir):
+    modules = super().find_package_modules(package, package_dir)
+    return [
+      (pkg, mod, file)
+      for (pkg, mod, file) in modules
+      if file not in encrypted
+      # if not any(fnmatch.fnmatchcase(file, pat=pattern) for pattern in encrypted)
+    ]
 
 
 setup(
-    name=package_name,
-    version=__version__,
-    ext_modules=cythonize(encrypted, compiler_directives={"language_level": "3"}),
-    cmdclass={"build_py": build_py},
-    entry_points="""
+  name=package_name,
+  version=__version__,
+  ext_modules=cythonize(encrypted, compiler_directives={"language_level": "3"}),
+  cmdclass={"build_py": build_py},
+  entry_points="""
     [console_scripts]
     pit=pit.cli:pit
-    """
+    """,
 )
