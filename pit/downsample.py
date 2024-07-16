@@ -30,7 +30,7 @@ def bars_ops_combinations(
 
 
 def downsample_1m_to_10m(
-  df: pl.DataFrame | pl.LazyFrame, bars: Optional[list[str]] = None
+  df: pl.DataFrame, bars: Optional[list[str]] = None
 ) -> pl.DataFrame:
   assert "time" in df.columns, "column `time` not in df.columns"
   assert "date" in df.columns, "date not in df.columns"
@@ -42,10 +42,6 @@ def downsample_1m_to_10m(
 
   expr_list, agg_columns = bars_ops_combinations(bars, ops=["mean", "std"])
   expr_list.append(pl.col("time").count().alias("count"))  # for debug
-
-  if isinstance(df, pl.DataFrame):
-    df = df.lazy()
-
   meta_cols = ["symbol", "date", "time"]
   # select proper input
   df = (
@@ -71,7 +67,6 @@ def downsample_1m_to_10m(
       include_boundaries=True,
     )
     .agg(expr_list)
-    .collect()
   )
 
   _df: pl.DataFrame = _df.with_columns(
