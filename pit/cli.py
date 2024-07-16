@@ -1,10 +1,13 @@
 import datetime
+import glob
 import os
+from collections import defaultdict
 from pathlib import Path
 from time import perf_counter
 
 import click
 import polars as pl
+import polars.selectors as cs
 from loguru import logger
 
 from pit import (
@@ -204,6 +207,9 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
         click.echo(f"\U0001F680 {task=}.")
         _run_download_for_one_task(
             begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
+
+    t = perf_counter() - s
+    click.echo(f"all tasks done in {t:.2f}s.")
    
 
 @click.command()
@@ -269,7 +275,10 @@ def downsample10(n_jobs, n_cpu, verbose):
     click.echo(f"all tasks done in {t:.2f}s.")
 
 
-def _merge_single_date(_date):
+def _merge_single_group(group_tag: str, group_dates: str | list[str]):
+    if isinstance(group_dates, str):
+        group_dates = [group_dates]
+    
     cfg = read_config()
     dir_1m = Path(cfg.raw.dir).joinpath('bar_1m')
     dir_univ = Path(cfg.raw.dir).joinpath('univ')
@@ -279,6 +288,13 @@ def _merge_single_date(_date):
     tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
     if not tgt_dir.exists():
         tgt_dir.mkdir(parents=True, exist_ok=True)
+    # clear year and month group
+    if len(group_tag) == 4 or len(group_tag) == 7:
+      date_stems = [Path(_p).stem for _p in glob.glob(os.path.join(tgt_dir, f"{group_tag}*.parq"))]
+      for stem in date_stems:
+        if stem != group_tag:
+            os.remove(os.path.join(tgt_dir, f"{stem}.parq")) # small files are replaced.
+    
     import itertools
 
     from dlkit.utils import get_time_slots
@@ -293,27 +309,8 @@ def _merge_single_date(_date):
     v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
     
     with pl.StringCache():
-        # s, t = min(dates), max(dates)
-        # exists = [file for file in os.listdir(tgt_dir) if file.startswith(month)]
-
-        # if len(exists) == 0:
-        #     # df_cur = pl.DataFrame()  # empty df
-        #     pass
-        # elif len(exists) == 1:
-        #     cur_s, cur_t = re.findall(r"\d{4}-\d{2}-\d{2}", exists[0])
-        #     if all(cur_s <= _d <= cur_t for _d in dates):
-        #         return  # already merged
-        #     else:
-        #         os.remove(f"{tgt_dir}/{exists[0]}")
-        #         logger.info(f"remove {tgt_dir}/{exists[0]}")
-        # else:
-        #     for _file in exists:
-        #         os.remove(f"{tgt_dir}/{_file}")
-        #         logger.info(f"remove {tgt_dir}/{_file}")
-            # raise ValueError(f"multiple files found for {month}")
-
-        # df_list = []
-        # for _d in dates:
+        df_list = []
+        for _date in group_dates:
             df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
             bars = get_bars("v2")
             df_10m = downsample_1m_to_10m(
@@ -326,8 +323,11 @@ def _merge_single_date(_date):
             df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
             df = df.join(df_ret, on=["date", "symbol"], how="left")
             df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
-            df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
-            df.write_parquet(f"{tgt_dir}/{_date}.parq")
+            df = df.with_columns(cs.numeric().cast(pl.Float32))
+            # df.write_parquet(f"{tgt_dir}/{_date}.parq")
+            df_list.append(df)
+        df = pl.concat(df_list)
+        df.write_parquet(f"{tgt_dir}/{group_tag}.parq")
 
 
 @click.command()
@@ -358,17 +358,35 @@ def generate_dataset(n_jobs, n_cpu):
     src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
     # always drop 6 recent dates to avoid incomplete data.
     src_dates = sorted(src_dates)[:-6]
-
     click.echo(f"total {len(src_dates)} tasks (dates) to be merged.")
+    
+    # merge dates as much as possible
+    this_year = datetime.datetime.now().year
+    this_month = datetime.datetime.now().month
+    
+    year_groups = defaultdict(list)
+    for _date in src_dates:
+        year = int(_date[:4])
+        year_groups[year].append(_date)
+    month_groups = defaultdict(list)
+    for _date in src_dates:
+        if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
+            month_groups[_date[:7]].append(_date)
+    date_groups = defaultdict(list)
+    for _date in src_dates:
+        if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
+            date_groups[_date].append(_date)
+    
+    all_groups = year_groups | month_groups | date_groups
     
     s = perf_counter()
     task_ids = []
     n_task_finished = 0
-    for _date in src_dates:
-        task_id = ray.remote(_merge_single_date).options(
+    for group_tag, group_dates in all_groups.items():
+        task_id = ray.remote(_merge_single_group).options(
             name="x",
             num_cpus=n_cpu,
-        ).remote(_date)
+        ).remote(group_tag, group_dates)
         task_ids.append(task_id)
 
         if len(task_ids) >= n_jobs:

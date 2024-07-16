@@ -74,7 +74,7 @@ class OfflineDataSource(DataSource):
                     raise ValueError(f"date_col {date_col} not available in columns.")
             df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
         if fill_nan:
-            df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
+            df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
         self.df_lazy = df
 
     def collect(self) -> pl.DataFrame:
