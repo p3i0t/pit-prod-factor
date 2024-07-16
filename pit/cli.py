@@ -1,5 +1,6 @@
 import datetime
 import glob
+import itertools
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -8,6 +9,7 @@ from time import perf_counter
 import click
 import polars as pl
 import polars.selectors as cs
+import ray
 from loguru import logger
 
 from pit import (
@@ -141,9 +143,6 @@ def _run_download_for_one_task(
     click.echo(f"{len(left_dates)} tasks to be done.")
 
   if task_name == "bar_1m":
-    # fetch data in parallel on a daily basis since data is large.
-    import ray
-
     task_ids = []
     n_task_finished = 0
     for exp_id, d in enumerate(left_dates, 1):
@@ -238,8 +237,6 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
 @click.option("--verbose", "-v", is_flag=True, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu, verbose):
   """Downsample 1m to 10m."""
-  import glob
-
   cfg = read_config()
   src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
   tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
@@ -249,8 +246,6 @@ def downsample10(n_jobs, n_cpu, verbose):
     click.echo(f"downsample from {src_dir} to {tgt_dir}")
   Path(tgt_dir).mkdir(parents=True, exist_ok=True)
   import re
-
-  import ray
 
   @ray.remote(max_calls=3)
   def _downsample(file):
@@ -314,8 +309,8 @@ def _merge_single_group(group_tag: str, group_dates: str | list[str]):
     for stem in date_stems:
       if stem != group_tag:
         os.remove(os.path.join(tgt_dir, f"{stem}.parq"))  # small files are replaced.
-
-  import itertools
+    if os.path.exists(os.path.join(tgt_dir, f"{group_tag}.parq")):
+      return
 
   from dlkit.utils import get_time_slots
 
@@ -367,12 +362,6 @@ def generate_dataset(n_jobs, n_cpu):
   dir_ret = Path(cfg.raw.dir).joinpath("return")
   dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
 
-  # tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
-
-  import glob
-
-  import ray
-
   dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
   dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
   dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
@@ -383,7 +372,6 @@ def generate_dataset(n_jobs, n_cpu):
   src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
   # always drop 6 recent dates to avoid incomplete data.
   src_dates = sorted(src_dates)[:-6]
-  click.echo(f"total {len(src_dates)} tasks (dates) to be merged.")
 
   # merge dates as much as possible
   this_year = datetime.datetime.now().year
@@ -391,8 +379,8 @@ def generate_dataset(n_jobs, n_cpu):
 
   year_groups = defaultdict(list)
   for _date in src_dates:
-    year = int(_date[:4])
-    year_groups[year].append(_date)
+    if int(_date[:4]) == this_year:
+      year_groups[_date[:4]].append(_date)
   month_groups = defaultdict(list)
   for _date in src_dates:
     if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
@@ -401,8 +389,9 @@ def generate_dataset(n_jobs, n_cpu):
   for _date in src_dates:
     if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
       date_groups[_date].append(_date)
-
+  
   all_groups = year_groups | month_groups | date_groups
+  click.echo(f"{len(src_dates)} dates in total, {len(year_groups)} year tasks (dates) to be merged.")
 
   s = perf_counter()
   task_ids = []
