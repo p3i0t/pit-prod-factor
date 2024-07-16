@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Optional, Protocol, Tuple, Union
 
 import polars as pl
+import polars.selectors as cs
 from dlkit.utils import get_time_slots
 from loguru import logger
 
@@ -71,7 +72,7 @@ class OfflineDataSource(DataSource):
           raise ValueError(f"date_col {date_col} not available in columns.")
       df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
     if fill_nan:
-      df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
+      df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
     self.df_lazy = df
 
   def collect(self) -> pl.DataFrame:
@@ -225,7 +226,7 @@ class OnlineV2DownsampleDataSource(DataSource):
     df = df.rename(name_mapping)
 
     if self.fill_nan:
-      df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
+      df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
     t = perf_counter() - s
     logger.info(f"dataframe pivot, shape: {df.shape}, time elapsed: {t:.2f}s")
     return df
@@ -306,7 +307,7 @@ class Online10minDatareaderDataSource(DataSource):
     ]
     if self.fill_nan:
       df_merged = df_merged.with_columns(
-        pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None))
+        cs.numeric().fill_nan(pl.lit(None))
       )
     return df_merged
 
