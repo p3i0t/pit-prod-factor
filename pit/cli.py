@@ -337,7 +337,7 @@ def _merge_single_group(group_tag: str, group_dates: str | list[str]):
       df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
       bars = get_bars("v2")
       df_10m = downsample_1m_to_10m(
-        pl.scan_parquet(f"{dir_1m}/{_date}.parq"), bars=bars
+        pl.read_parquet(f"{dir_1m}/{_date}.parq"), bars=bars
       )
       df_10m = df_10m.select(["date", "symbol"] + v2_cols)
       df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
