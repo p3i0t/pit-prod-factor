@@ -175,7 +175,7 @@ def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
   df_close = df_close.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot"))
   # df_close["slot"] = df_close["time"].dt.strftime("%H%M")
 
-  df_intra = df_close.pivot(values="close", columns="slot", index=["date", "symbol"])
+  df_intra = df_close.pivot(values="close", on="slot", index=["date", "symbol"])
   df_intra = df_intra.with_columns(
     pl.col("1000").truediv(pl.col("0935")).sub(1).alias("0930_30m"),
     pl.col("1030").truediv(pl.col("1005")).sub(1).alias("1000_30m"),

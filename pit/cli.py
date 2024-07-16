@@ -379,7 +379,7 @@ def generate_dataset(n_jobs, n_cpu):
 
   year_groups = defaultdict(list)
   for _date in src_dates:
-    if int(_date[:4]) == this_year:
+    if int(_date[:4]) != this_year:
       year_groups[_date[:4]].append(_date)
   month_groups = defaultdict(list)
   for _date in src_dates:
@@ -391,11 +391,12 @@ def generate_dataset(n_jobs, n_cpu):
       date_groups[_date].append(_date)
   
   all_groups = year_groups | month_groups | date_groups
-  click.echo(f"{len(src_dates)} dates in total, {len(year_groups)} year tasks (dates) to be merged.")
+  click.echo(f"{len(src_dates)} dates in total.")
+  click.echo(f"{len(all_groups)} tasks (groups).")
 
   s = perf_counter()
   task_ids = []
-  n_task_finished = 0
+  # n_task_finished = 0
   for group_tag, group_dates in all_groups.items():
     task_id = (
       ray.remote(_merge_single_group)
@@ -410,11 +411,11 @@ def generate_dataset(n_jobs, n_cpu):
     if len(task_ids) >= n_jobs:
       dones, task_ids = ray.wait(task_ids, num_returns=1)
       ray.get(dones)
-      n_task_finished += 1
-      logger.info(f"{n_task_finished} tasks finished.")
+      # n_task_finished += 1
+      # logger.info(f"{n_task_finished} tasks finished.")
   ray.get(task_ids)
   t = perf_counter() - s
-  click.echo(f"{len(src_dates)} tasks done in {t:.2f}s.")
+  click.echo(f"{len(all_groups)} tasks done in {t:.2f}s.")
 
 
 @click.command()
