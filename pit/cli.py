@@ -48,7 +48,7 @@ tasks_dict = {
   "lag_return": download_lag_return,
   "ohlcv_1m": download_ohlcv_minute,
   "barra": download_barra,
-  "tick": download_stock_tick
+  "tick": download_stock_tick,
 }
 
 
@@ -198,8 +198,9 @@ def _run_download_for_one_task(
   "-t",
   "task_name",
   default="ohlcv_1m",
-  type=click.Choice(["return", "lag_return", "univ", "bar_1m", 
-                     "tick", "barra", "ohlcv_1m", "all"]),
+  type=click.Choice(
+    ["return", "lag_return", "univ", "bar_1m", "tick", "barra", "ohlcv_1m", "all"]
+  ),
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print details.")
 @click.option(
@@ -216,24 +217,27 @@ def _run_download_for_one_task(
   help="num of cpus per task (for bar_1m only), defaults to 2.",
 )
 def download(begin, end, task_name, verbose, n_jobs, n_cpu):
-    """Download data via datareader."""
-    if task_name == "all":
-        tasks = list(tasks_dict.keys())
-    else:
-        if task_name not in tasks_dict:
-            click.echo(f"task {task_name} is not supported.")
-            raise TaskNotSupportedError(f"task {task_name} is not one of {tasks_dict.keys()}.")
-        tasks = [task_name]
-    
-    s = perf_counter()
-    for task in tasks:
-        click.echo(f"\U0001F680 {task=}.")
-        _run_download_for_one_task(
-            begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu)
+  """Download data via datareader."""
+  if task_name == "all":
+    tasks = list(tasks_dict.keys())
+  else:
+    if task_name not in tasks_dict:
+      click.echo(f"task {task_name} is not supported.")
+      raise TaskNotSupportedError(
+        f"task {task_name} is not one of {tasks_dict.keys()}."
+      )
+    tasks = [task_name]
 
-    t = perf_counter() - s
-    click.echo(f"all tasks done in {t:.2f}s.")
-   
+  s = perf_counter()
+  for task in tasks:
+    click.echo(f"\U0001f680 {task=}.")
+    _run_download_for_one_task(
+      begin, end, task, verbose=verbose, n_jobs=n_jobs, cpus_per_task=n_cpu
+    )
+
+  t = perf_counter() - s
+  click.echo(f"all tasks done in {t:.2f}s.")
+
 
 @click.command()
 @click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
@@ -299,54 +303,56 @@ def downsample10(n_jobs, n_cpu, verbose):
 
 
 def _merge_single_group(group_tag: str, group_dates: str | list[str]):
-    if isinstance(group_dates, str):
-        group_dates = [group_dates]
-    
-    cfg = read_config()
-    dir_1m = Path(cfg.raw.dir).joinpath('bar_1m')
-    dir_univ = Path(cfg.raw.dir).joinpath('univ')
-    dir_ret = Path(cfg.raw.dir).joinpath('return')
-    dir_lag_ret = Path(cfg.raw.dir).joinpath('lag_return')
+  if isinstance(group_dates, str):
+    group_dates = [group_dates]
 
-    tgt_dir = Path(cfg.dataset.dir).joinpath('10m_v2')
-    if not tgt_dir.exists():
-        tgt_dir.mkdir(parents=True, exist_ok=True)
-    # clear year and month group
-    if len(group_tag) == 4 or len(group_tag) == 7:
-      date_stems = [Path(_p).stem for _p in glob.glob(os.path.join(tgt_dir, f"{group_tag}*.parq"))]
-      for stem in date_stems:
-        if stem != group_tag:
-            os.remove(os.path.join(tgt_dir, f"{stem}.parq")) # small files are replaced.
-    
-    from dlkit.utils import get_time_slots
+  cfg = read_config()
+  dir_1m = Path(cfg.raw.dir).joinpath("bar_1m")
+  dir_univ = Path(cfg.raw.dir).joinpath("univ")
+  dir_ret = Path(cfg.raw.dir).joinpath("return")
+  dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
 
-    from pit.downsample import downsample_1m_to_10m
+  tgt_dir = Path(cfg.dataset.dir).joinpath("10m_v2")
+  if not tgt_dir.exists():
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+  # clear year and month group
+  if len(group_tag) == 4 or len(group_tag) == 7:
+    date_stems = [
+      Path(_p).stem for _p in glob.glob(os.path.join(tgt_dir, f"{group_tag}*.parq"))
+    ]
+    for stem in date_stems:
+      if stem != group_tag:
+        os.remove(os.path.join(tgt_dir, f"{stem}.parq"))  # small files are replaced.
 
-    bars = get_bars("v2")
-    slots = get_time_slots("0930", "1500", freq_in_min=10)
-    v2_factors = [f"{_b}_{_agg}" for _b, _agg in itertools.product(bars, ["mean", "std"])]
-    v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
-    
-    with pl.StringCache():
-        df_list = []
-        for _date in group_dates:
-            df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
-            bars = get_bars("v2")
-            df_10m = downsample_1m_to_10m(
-                pl.scan_parquet(f"{dir_1m}/{_date}.parq"), bars=bars
-            )
-            df_10m = df_10m.select(["date", "symbol"] + v2_cols)
-            df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
-            df_ret = pl.scan_parquet(f"{dir_ret}/{_date}.parq").collect()
-            df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_date}.parq").collect()
-            df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
-            df = df.join(df_ret, on=["date", "symbol"], how="left")
-            df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
-            df = df.with_columns(cs.numeric().cast(pl.Float32))
-            # df.write_parquet(f"{tgt_dir}/{_date}.parq")
-            df_list.append(df)
-        df = pl.concat(df_list)
-        df.write_parquet(f"{tgt_dir}/{group_tag}.parq")
+  from dlkit.utils import get_time_slots
+
+  from pit.downsample import downsample_1m_to_10m
+
+  bars = get_bars("v2")
+  slots = get_time_slots("0930", "1500", freq_in_min=10)
+  v2_factors = [f"{_b}_{_agg}" for _b, _agg in itertools.product(bars, ["mean", "std"])]
+  v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
+
+  with pl.StringCache():
+    df_list = []
+    for _date in group_dates:
+      df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
+      bars = get_bars("v2")
+      df_10m = downsample_1m_to_10m(
+        pl.scan_parquet(f"{dir_1m}/{_date}.parq"), bars=bars
+      )
+      df_10m = df_10m.select(["date", "symbol"] + v2_cols)
+      df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
+      df_ret = pl.scan_parquet(f"{dir_ret}/{_date}.parq").collect()
+      df_lag_ret = pl.scan_parquet(f"{dir_lag_ret}/{_date}.parq").collect()
+      df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
+      df = df.join(df_ret, on=["date", "symbol"], how="left")
+      df = df.join(df_lag_ret, on=["date", "symbol"], how="left")
+      df = df.with_columns(cs.numeric().cast(pl.Float32))
+      # df.write_parquet(f"{tgt_dir}/{_date}.parq")
+      df_list.append(df)
+    df = pl.concat(df_list)
+    df.write_parquet(f"{tgt_dir}/{group_tag}.parq")
 
 
 @click.command()
@@ -361,51 +367,57 @@ def _merge_single_group(group_tag: str, group_dates: str | list[str]):
   help="number of cpus per task, defaults to 2.",
 )
 def generate_dataset(n_jobs, n_cpu):
-    """Generate dataset from downloaded raw data."""
-    cfg = read_config()
-    dir_1m = Path(cfg.raw.dir).joinpath("bar_1m")
-    dir_univ = Path(cfg.raw.dir).joinpath("univ")
-    dir_ret = Path(cfg.raw.dir).joinpath("return")
-    dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
+  """Generate dataset from downloaded raw data."""
+  cfg = read_config()
+  dir_1m = Path(cfg.raw.dir).joinpath("bar_1m")
+  dir_univ = Path(cfg.raw.dir).joinpath("univ")
+  dir_ret = Path(cfg.raw.dir).joinpath("return")
+  dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
 
-    dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
-    dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
-    dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
-    dates_lag_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_lag_ret, "*.parq"))]
-                      
-    src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
-    # always drop 6 recent dates to avoid incomplete data.
-    src_dates = sorted(src_dates)[:-6]
-    
-    # merge dates as much as possible
-    this_year = datetime.datetime.now().year
-    this_month = datetime.datetime.now().month
-    
-    year_groups = defaultdict(list)
-    for _date in src_dates:
-        year = int(_date[:4])
-        year_groups[year].append(_date)
-    month_groups = defaultdict(list)
-    for _date in src_dates:
-        if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
-            month_groups[_date[:7]].append(_date)
-    date_groups = defaultdict(list)
-    for _date in src_dates:
-        if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
-            date_groups[_date].append(_date)
-    
-    all_groups = year_groups | month_groups | date_groups
-    
-    s = perf_counter()
-    task_ids = []
-    for group_tag, group_dates in all_groups.items():
-        task_id = ray.remote(_merge_single_group).options(
-            name="x",
-            num_cpus=n_cpu,
-        ).remote(group_tag, group_dates)
-        task_ids.append(task_id)
-    t = perf_counter() - s
-    click.echo(f"total {len(src_dates)} tasks done in {t:.2f}s.")
+  dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
+  dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
+  dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
+  dates_lag_ret = [
+    Path(_p).stem for _p in glob.glob(os.path.join(dir_lag_ret, "*.parq"))
+  ]
+
+  src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
+  # always drop 6 recent dates to avoid incomplete data.
+  src_dates = sorted(src_dates)[:-6]
+
+  # merge dates as much as possible
+  this_year = datetime.datetime.now().year
+  this_month = datetime.datetime.now().month
+
+  year_groups = defaultdict(list)
+  for _date in src_dates:
+    year = int(_date[:4])
+    year_groups[year].append(_date)
+  month_groups = defaultdict(list)
+  for _date in src_dates:
+    if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
+      month_groups[_date[:7]].append(_date)
+  date_groups = defaultdict(list)
+  for _date in src_dates:
+    if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
+      date_groups[_date].append(_date)
+
+  all_groups = year_groups | month_groups | date_groups
+
+  s = perf_counter()
+  task_ids = []
+  for group_tag, group_dates in all_groups.items():
+    task_id = (
+      ray.remote(_merge_single_group)
+      .options(
+        name="x",
+        num_cpus=n_cpu,
+      )
+      .remote(group_tag, group_dates)
+    )
+    task_ids.append(task_id)
+  t = perf_counter() - s
+  click.echo(f"total {len(src_dates)} tasks done in {t:.2f}s.")
 
 
 @click.command()

@@ -58,23 +58,21 @@ class OfflineDataSource(DataSource):
     df: pl.LazyFrame = pl.scan_parquet(data_path)
 
     if universe:
-        df = df.filter(pl.col(universe))
+      df = df.filter(pl.col(universe))
     # must be behind universe filter, because `universe` column is not in `columns``.
     df = df.select(columns)
     if date_range:
-        begin, end = date_range
-        begin = any2date(begin)
-        end = any2date(end)
-        if date_col is None:
-            raise ValueError(
-                "date_col should not be None if date_range is not None."
-            )
-        else:
-            if date_col not in columns:
-                raise ValueError(f"date_col {date_col} not available in columns.")
-        df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
+      begin, end = date_range
+      begin = any2date(begin)
+      end = any2date(end)
+      if date_col is None:
+        raise ValueError("date_col should not be None if date_range is not None.")
+      else:
+        if date_col not in columns:
+          raise ValueError(f"date_col {date_col} not available in columns.")
+      df = df.filter(pl.col(date_col).is_between(pl.lit(begin), pl.lit(end)))
     if fill_nan:
-        df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
+      df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
     self.df_lazy = df
 
   def collect(self) -> pl.DataFrame:
@@ -308,9 +306,7 @@ class Online10minDatareaderDataSource(DataSource):
       c.replace("avg", "mean").replace("stddevSamp", "std") for c in df_merged.columns
     ]
     if self.fill_nan:
-      df_merged = df_merged.with_columns(
-        cs.numeric().fill_nan(pl.lit(None))
-      )
+      df_merged = df_merged.with_columns(cs.numeric().fill_nan(pl.lit(None)))
     return df_merged
 
 
