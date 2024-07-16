@@ -1,15 +1,16 @@
 import datetime
 from pathlib import Path
-from typing import Optional, Protocol, Union, List, Tuple
+from typing import List, Optional, Protocol, Tuple, Union
 
-from loguru import logger
 import polars as pl
-
+import polars.selectors as cs
 from dlkit.utils import get_time_slots
+from loguru import logger
+
 from pit import get_bars
-from pit.utils import any2date
-from pit.tcalendar import _parse_dhm
 from pit.dr_context import DatareaderContext
+from pit.tcalendar import _parse_dhm
+from pit.utils import any2date
 
 __all__ = [
     "DataSource",
@@ -218,7 +219,7 @@ class OnlineV2DownsampleDataSource(DataSource):
             logger.info(
                 "[debug] df after downsample:", df.select(["date", "symbol"]).head(5)
             )
-        df = df.pivot(index=["symbol", "date"], columns="slot", values=agg_columns)
+        df = df.pivot(index=["symbol", "date"], on="slot", values=agg_columns)
         if self.verbose is True:
             logger.info(
                 "[debug] df after pivot:", df.select(["date", "symbol"]).head(5)
@@ -230,7 +231,7 @@ class OnlineV2DownsampleDataSource(DataSource):
         df = df.rename(name_mapping)
 
         if self.fill_nan:
-            df = df.with_columns(pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None)))
+            df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
         t = perf_counter() - s
         logger.info(f"dataframe pivot, shape: {df.shape}, time elapsed: {t:.2f}s")
         return df
@@ -312,7 +313,7 @@ class Online10minDatareaderDataSource(DataSource):
         ]
         if self.fill_nan:
             df_merged = df_merged.with_columns(
-                pl.col(pl.NUMERIC_DTYPES).fill_nan(pl.lit(None))
+                cs.numeric().fill_nan(pl.lit(None))
             )
         return df_merged
 
@@ -340,8 +341,8 @@ class IntradayReturnDataSource(DataSource):
             start="0930", end="1500", freq_in_min=1, bar_on_the_right=True
         )
         l_indices = [x_slots.index(s) for s in self.slot]
-        import itertools
         import datetime
+        import itertools
 
         all_triples = [
             (ll, ll + dd, dd) for ll, dd in itertools.product(l_indices, self.duration)
@@ -366,13 +367,8 @@ class IntradayReturnDataSource(DataSource):
             ).collect()
 
             df_ret = df.pivot(
-                index=["symbol", "date"], columns="slot", values=self.price
+                index=["symbol", "date"], on="slot", values=self.price
             )
-            # name_mapping = {
-            #     f"{col}_slot_{slt}": f"{slt}"
-            #     for col, slt in itertools.product([self.price], )
-            # }
-            # df_ret = df_ret.rename(name_mapping)
             df = df_ret.drop([_s.strftime("%H%M") for _s in all_slots])
             df_ret = df_ret.with_columns(
                 pl.col(_t).truediv(pl.col(_s)).sub(1.0).alias(f"ret_{_s}_{_d}m")
