@@ -247,8 +247,6 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
 @click.option("--verbose", "-v", is_flag=True, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu, verbose):
   """Downsample 1m to 10m."""
-  import glob
-
   cfg = read_config()
   src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
   tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
@@ -258,8 +256,6 @@ def downsample10(n_jobs, n_cpu, verbose):
     click.echo(f"downsample from {src_dir} to {tgt_dir}")
   Path(tgt_dir).mkdir(parents=True, exist_ok=True)
   import re
-
-  import ray
 
   @ray.remote(max_calls=3)
   def _downsample(file):
@@ -323,6 +319,8 @@ def _merge_single_group(group_tag: str, group_dates: str | list[str]):
     for stem in date_stems:
       if stem != group_tag:
         os.remove(os.path.join(tgt_dir, f"{stem}.parq"))  # small files are replaced.
+    if os.path.exists(os.path.join(tgt_dir, f"{group_tag}.parq")):
+      return
 
   from dlkit.utils import get_time_slots
 
@@ -391,8 +389,8 @@ def generate_dataset(n_jobs, n_cpu):
 
   year_groups = defaultdict(list)
   for _date in src_dates:
-    year = int(_date[:4])
-    year_groups[year].append(_date)
+    if int(_date[:4]) == this_year:
+      year_groups[_date[:4]].append(_date)
   month_groups = defaultdict(list)
   for _date in src_dates:
     if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
@@ -401,11 +399,13 @@ def generate_dataset(n_jobs, n_cpu):
   for _date in src_dates:
     if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
       date_groups[_date].append(_date)
-
+  
   all_groups = year_groups | month_groups | date_groups
+  click.echo(f"{len(src_dates)} dates in total, {len(year_groups)} year tasks (dates) to be merged.")
 
   s = perf_counter()
   task_ids = []
+  n_task_finished = 0
   for group_tag, group_dates in all_groups.items():
     task_id = (
       ray.remote(_merge_single_group)
@@ -416,8 +416,15 @@ def generate_dataset(n_jobs, n_cpu):
       .remote(group_tag, group_dates)
     )
     task_ids.append(task_id)
+
+    if len(task_ids) >= n_jobs:
+      dones, task_ids = ray.wait(task_ids, num_returns=1)
+      ray.get(dones)
+      n_task_finished += 1
+      logger.info(f"{n_task_finished} tasks finished.")
+  ray.get(task_ids)
   t = perf_counter() - s
-  click.echo(f"total {len(src_dates)} tasks done in {t:.2f}s.")
+  click.echo(f"{len(src_dates)} tasks done in {t:.2f}s.")
 
 
 @click.command()

@@ -216,7 +216,7 @@ class OnlineV2DownsampleDataSource(DataSource):
     slots = df.get_column("slot").unique().sort().to_list()
     if self.verbose is True:
       logger.info("[debug] df after downsample:", df.select(["date", "symbol"]).head(5))
-    df = df.pivot(on="slot", index=["symbol", "date"], values=agg_columns)
+    df = df.pivot(index=["symbol", "date"], on="slot", values=agg_columns)
     if self.verbose is True:
       logger.info("[debug] df after pivot:", df.select(["date", "symbol"]).head(5))
     name_mapping = {
@@ -354,7 +354,7 @@ class IntradayReturnDataSource(DataSource):
       df = df.filter(pl.col("time").dt.time().is_in(all_slots))
       df = df.with_columns(pl.col("time").dt.strftime("%H%M").alias("slot")).collect()
 
-      df_ret = df.pivot(on="slot", index=["symbol", "date"], values=self.price)
+      df_ret = df.pivot(index=["symbol", "date"], on="slot", values=self.price)
       df = df_ret.drop([_s.strftime("%H%M") for _s in all_slots])
       df_ret = df_ret.with_columns(
         pl.col(_t).truediv(pl.col(_s)).sub(1.0).alias(f"ret_{_s}_{_d}m")

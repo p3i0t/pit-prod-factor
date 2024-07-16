@@ -2,6 +2,7 @@ import itertools
 from typing import Optional
 
 import polars as pl
+import polars.selectors as cs
 
 
 def bars_ops_combinations(
@@ -81,11 +82,11 @@ def downsample_1m_to_10m(
   )
 
   slots = _df.get_column("slot").unique().sort().to_list()
-  _df = _df.pivot(on="slot", index=["symbol", "date"], values=agg_columns)
+  _df = _df.pivot(index=["symbol", "date"], on="slot", values=agg_columns)
   name_mapping = {
     f"{col}_slot_{slt}": f"{col}_{slt}"
     for col, slt in itertools.product(agg_columns, slots)
   }
   _df = _df.rename(name_mapping)
-  _df = _df.with_columns(pl.col(pl.NUMERIC_DTYPES).cast(pl.Float32))
+  _df = _df.with_columns(cs.numeric().cast(pl.Float32))
   return _df
