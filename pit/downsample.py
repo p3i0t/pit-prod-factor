@@ -80,13 +80,6 @@ def downsample_1m_to_10m(
       # pl.col('_upper_boundary').dt.strftime('%Y-%m-%d').alias('date')
     ]
   )
-
-  slots = _df.get_column("slot").unique().sort().to_list()
   _df = _df.pivot(index=["symbol", "date"], on="slot", values=agg_columns)
-  name_mapping = {
-    f"{col}_slot_{slt}": f"{col}_{slt}"
-    for col, slt in itertools.product(agg_columns, slots)
-  }
-  _df = _df.rename(name_mapping)
   _df = _df.with_columns(cs.numeric().cast(pl.Float32))
   return _df
