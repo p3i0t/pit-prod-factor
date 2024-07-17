@@ -213,17 +213,17 @@ class OnlineV2DownsampleDataSource(DataSource):
 
     # long to wide
     s = perf_counter()
-    slots = df.get_column("slot").unique().sort().to_list()
+    # slots = df.get_column("slot").unique().sort().to_list()
     if self.verbose is True:
       logger.info("[debug] df after downsample:", df.select(["date", "symbol"]).head(5))
     df = df.pivot(index=["symbol", "date"], on="slot", values=agg_columns)
     if self.verbose is True:
       logger.info("[debug] df after pivot:", df.select(["date", "symbol"]).head(5))
-    name_mapping = {
-      f"{col}_slot_{slt}": f"{col}_{slt}"
-      for col, slt in itertools.product(agg_columns, slots)
-    }
-    df = df.rename(name_mapping)
+    # name_mapping = {
+    #   f"{col}_slot_{slt}": f"{col}_{slt}"
+    #   for col, slt in itertools.product(agg_columns, slots)
+    # }
+    # df = df.rename(name_mapping)
 
     if self.fill_nan:
       df = df.with_columns(cs.numeric().fill_nan(pl.lit(None)))
