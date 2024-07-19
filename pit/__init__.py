@@ -12,4 +12,4 @@ from pit.prod import (
 # noqa
 from pit.train import TrainPipeline  # noqa
 
-__version__ = "2024.07.17"
+__version__ = "2024.07.19"
