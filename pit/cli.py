@@ -582,15 +582,16 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
   ip = InferencePipeline(args=args)
 
   from pit.datasource import OfflineDataSource
-  ds = OfflineDataSource(
-      data_path=str(args.dataset_dir) + "/*",
-      columns=["date", "symbol"] + args.x_slot_columns,
-      universe=args.universe,
-      date_range=(any2date(begin), any2date(end)),
-      date_col="date",
-      fill_nan=True,
-    )
-  o = ip(ds.collect())
+  with pl.StringCache():
+    ds = OfflineDataSource(
+        data_path=str(args.dataset_dir) + "/*",
+        columns=["date", "symbol"] + args.x_slot_columns,
+        universe=args.universe,
+        date_range=(any2date(begin), any2date(end)),
+        date_col="date",
+        fill_nan=True,
+      )
+    o = ip(ds.collect())
   # with pl.StringCache():
   #   df_list = []
   #   for infer_date in infer_dates:
