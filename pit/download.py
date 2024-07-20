@@ -9,24 +9,18 @@ from pit.utils import Datetime
 __all__ = ["download_stock_minute", "download_universe", "download_tcalendar"]
 
 
-def download_stock_minute(begin: Datetime, end: Datetime) -> pl.DataFrame:
+def download_stock_minute(
+  begin: Datetime, 
+  end: Datetime, 
+  version: str = "3.4"
+) -> pl.DataFrame:
   """Download all stock minute bars from clickhouse.
-
-  Args:
-      begin (Datetime): begin date.
-      end (Datetime): end date.
-
-  Raises:
-      ImportError: Error: module datareader not found
-
-  Returns:
-      pl.DataFrame: _description_
   """
   with DatareaderContext() as dr:
     df: pl.DataFrame = dr.read(
       dr.meta.StockMinute(
         # columns=None,
-        version="2",
+        version=version,
         abbr=True,
       ),
       begin=begin,
@@ -103,16 +97,6 @@ def download_tcalendar(
 
 def download_return(begin: Datetime, end: Datetime) -> pl.DataFrame:
   """Download all stock minute bars from clickhouse.
-
-  Args:
-      begin (Datetime): begin date.
-      end (Datetime): end date.
-
-  Raises:
-      ImportError: Error: module datareader not found
-
-  Returns:
-      pl.DataFrame: _description_
   """
   n_list = [1, 2, 3, 5]
 

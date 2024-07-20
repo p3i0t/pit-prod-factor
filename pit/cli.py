@@ -71,7 +71,7 @@ DateType = ExtendedDate()
 class TaskNotSupportedError(Exception): ...
 
 
-def _download_single_date_bar_1m(
+def _download_for_single_date(
   # *,
   task_name: str,
   tasks_dict: dict,
@@ -155,7 +155,7 @@ def _run_download_for_one_task(
     n_task_finished = 0
     for exp_id, d in enumerate(left_dates, 1):
       task_id = (
-        ray.remote(_download_single_date_bar_1m)
+        ray.remote(_download_for_single_date)
         .options(name="x", num_cpus=cpus_per_task)
         .remote(task_name, tasks_dict, str(item_dir), verbose, d)
       )
@@ -260,7 +260,7 @@ def downsample10(n_jobs, n_cpu, verbose):
   @ray.remote(max_calls=3)
   def _downsample(file):
     bars = get_bars("v3")
-    downsample_1m_to_10m(pl.scan_parquet(f"{src_dir}/{file}"), bars=bars).write_parquet(
+    downsample_1m_to_10m(pl.read_parquet(f"{src_dir}/{file}"), bars=bars).write_parquet(
       f"{tgt_dir}/{file}"
     )
     return file

@@ -4,13 +4,13 @@ from omegaconf import OmegaConf
 
 
 def read_config():
-  PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit"))
+  PIT_DIR = os.path.expanduser(os.getenv("PIT_DIR", "~/.pit_extend"))
   default_config = {
     "pit_dir": PIT_DIR,
     # all the raw data items
     "raw": {
       "dir": "${pit_dir}/raw",
-      "dataitems": ["bar_1m", "univ", "return", "lag_return"],
+      "dataitems": ["bar_1m", "univ", "return", "lag_return", "barra", "ohlcv_1m", "tick"],
     },
     "dataset": {
       "dir": "${pit_dir}/dataset",
