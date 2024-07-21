@@ -685,8 +685,10 @@ def compute_slot_return(duration):
     .sub(1)
     .alias(f"ret_{duration}"),
   )
+  pit_dir = cfg.pit_dir
+  derived_dir = os.path.join(pit_dir, "derived")
 
-  item_dir = os.path.join(cfg.derived.dir, f"ret_{duration}")
+  item_dir = os.path.join(derived_dir, f"ret_{duration}")
   item_dir = Path(item_dir)
   item_dir.mkdir(parents=True, exist_ok=True)
 
