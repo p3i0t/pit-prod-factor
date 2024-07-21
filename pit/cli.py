@@ -246,10 +246,13 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
 )
 @click.option("--verbose", "-v", is_flag=True, help="whether to print progress.")
 def downsample10(n_jobs, n_cpu, verbose):
-  """Downsample 1m to 10m."""
+  """Downsample 1m to 10m (one file per day)."""
   cfg = read_config()
   src_dir = Path(cfg.raw.dir).joinpath("bar_1m")
-  tgt_dir = Path(cfg.derived.dir).joinpath("bar_10m")
+  pit_dir = cfg.pit_dir
+  derived_dir = os.path.join(pit_dir, "derived")
+  tgt_dir = os.path.join(derived_dir, "bar_10m")
+  
   from pit.downsample import downsample_1m_to_10m
 
   if verbose is True:
@@ -265,11 +268,13 @@ def downsample10(n_jobs, n_cpu, verbose):
     )
     return file
 
-  src_files = set(glob.glob(f"{src_dir}/*.parq"))
-  tgt_files = set(glob.glob(f"{tgt_dir}/*.parq"))
+  src_dates = set([Path(p).stem for p in os.listdir(src_dir)])
+  tgt_dates = set([Path(p).stem for p in os.listdir(tgt_dir)])
+  # src_files = set(glob.glob(f"{src_dir}/*.parq"))
+  # tgt_files = set(glob.glob(f"{tgt_dir}/*.parq"))
 
-  src_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in src_files])
-  tgt_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in tgt_files])
+  # src_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in src_files])
+  # tgt_dates = set([re.findall(r"\d{4}-\d{2}-\d{2}", d)[0] for d in tgt_files])
   left_dates = sorted(src_dates - tgt_dates)
   click.echo(f"{len(left_dates)} downsample tasks to be done.")
   left_files = [f"{d}.parq" for d in left_dates]
@@ -428,6 +433,55 @@ def generate_dataset(n_jobs, n_cpu):
   t = perf_counter() - s
   click.echo(f"{len(all_groups)} tasks done in {t:.2f}s.")
   
+
+def _merge_single_group2(group_tag: str, group_dates: str | list[str]):
+  if isinstance(group_dates, str):
+    group_dates = [group_dates]
+
+  cfg = read_config()
+  pit_dir = cfg.pit_dir
+  derived_dir = os.path.join(pit_dir, "derived")
+  dir_10m = os.path.join(derived_dir, "bar_10m")
+  dir_ret = os.path.join(derived_dir, "ret_all")
+  dir_univ = Path(cfg.raw.dir).joinpath("univ")
+  
+  tgt_dir = Path(cfg.dataset.dir).joinpath("10m_all")
+  if not tgt_dir.exists():
+    tgt_dir.mkdir(parents=True, exist_ok=True)
+  # clear year and month group
+  if len(group_tag) == 4 or len(group_tag) == 7:
+    date_stems = [
+      Path(_p).stem for _p in glob.glob(os.path.join(tgt_dir, f"{group_tag}*.parq"))
+    ]
+    for stem in date_stems:
+      if stem != group_tag:
+        os.remove(os.path.join(tgt_dir, f"{stem}.parq"))  # small files are replaced.
+    if os.path.exists(os.path.join(tgt_dir, f"{group_tag}.parq")):
+      return
+
+  from dlkit.utils import get_time_slots
+
+  bars = get_bars("v3")
+  slots = get_time_slots("0930", "1500", freq_in_min=10)
+  v2_factors = [f"{_b}_{_agg}" for _b, _agg in itertools.product(bars, ["mean", "std"])]
+  v2_cols = [f"{_f}_{_s}" for _f, _s in itertools.product(v2_factors, slots)]
+
+  with pl.StringCache():
+    df_list = []
+    for _date in group_dates:
+      df_univ = pl.scan_parquet(f"{dir_univ}/{_date}.parq").collect()
+      df_10m = pl.read_parquet(f"{dir_10m}/{_date}.parq")
+      df_10m = df_10m.select(["date", "symbol"] + v2_cols)
+      df_10m = df_10m.with_columns(pl.col("symbol").cast(pl.Categorical))
+      df_ret = pl.scan_parquet(f"{dir_ret}/{_date}.parq").collect()
+      df = df_univ.join(df_10m, on=["date", "symbol"], how="left")
+      df = df.join(df_ret, on=["date", "symbol"], how="left")
+      df = df.with_columns(cs.numeric().cast(pl.Float32))
+      df_list.append(df)
+    df = pl.concat(df_list)
+    df.write_parquet(f"{tgt_dir}/{group_tag}.parq")
+
+
 @click.command()
 @click.option(
   "--n_jobs", default=10, type=int, help="num of parallel jobs, defaults to 10."
@@ -442,19 +496,18 @@ def generate_dataset(n_jobs, n_cpu):
 def generate_dataset2(n_jobs, n_cpu):
   """Generate dataset from downloaded raw data."""
   cfg = read_config()
-  dir_1m = Path(cfg.raw.dir).joinpath("bar_1m")
-  dir_univ = Path(cfg.raw.dir).joinpath("univ")
-  dir_ret = Path(cfg.raw.dir).joinpath("return")
-  dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
 
-  dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
+  pit_dir = cfg.pit_dir
+  derived_dir = os.path.join(pit_dir, "derived")
+  dir_10m = os.path.join(derived_dir, "bar_10m")
+  dir_ret = os.path.join(derived_dir, "ret_all")
+  dir_univ = Path(cfg.raw.dir).joinpath("univ")
+
+  dates_10m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_10m, "*.parq"))]
   dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
   dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
-  dates_lag_ret = [
-    Path(_p).stem for _p in glob.glob(os.path.join(dir_lag_ret, "*.parq"))
-  ]
 
-  src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
+  src_dates = set(dates_10m) & set(dates_univ) & set(dates_ret)
   # always drop 6 recent dates to avoid incomplete data.
   src_dates = sorted(src_dates)[:-6]
 
@@ -485,7 +538,7 @@ def generate_dataset2(n_jobs, n_cpu):
   n_task_finished = 0
   for group_tag, group_dates in all_groups.items():
     task_id = (
-      ray.remote(_merge_single_group)
+      ray.remote(_merge_single_group2)
       .options(
         name="x",
         num_cpus=n_cpu,
@@ -794,6 +847,7 @@ def pit(ctx):
 
 pit.add_command(train_single)
 pit.add_command(download)
+pit.add_command(downsample10)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
