@@ -239,6 +239,14 @@ def download(begin, end, task_name, verbose, n_jobs, n_cpu):
   click.echo(f"all tasks done in {t:.2f}s.")
 
 
+def _downsample(file, src_dir, tgt_dir):
+  from pit.downsample import downsample_1m_to_10m
+  bars = get_bars("v3")
+  downsample_1m_to_10m(pl.read_parquet(f"{src_dir}/{file}"), bars=bars).write_parquet(
+    f"{tgt_dir}/{file}"
+  )
+  return file
+  
 @click.command()
 @click.option("--n_jobs", default=10, type=int, help="number of parallel jobs.")
 @click.option(
@@ -253,20 +261,11 @@ def downsample10(n_jobs, n_cpu, verbose):
   derived_dir = os.path.join(pit_dir, "derived")
   tgt_dir = os.path.join(derived_dir, "bar_10m")
   
-  from pit.downsample import downsample_1m_to_10m
 
   if verbose is True:
     click.echo(f"downsample from {src_dir} to {tgt_dir}")
   Path(tgt_dir).mkdir(parents=True, exist_ok=True)
-  import re
 
-  @ray.remote(max_calls=3)
-  def _downsample(file):
-    bars = get_bars("v3")
-    downsample_1m_to_10m(pl.read_parquet(f"{src_dir}/{file}"), bars=bars).write_parquet(
-      f"{tgt_dir}/{file}"
-    )
-    return file
 
   src_dates = set([Path(p).stem for p in os.listdir(src_dir)])
   tgt_dates = set([Path(p).stem for p in os.listdir(tgt_dir)])
@@ -285,10 +284,10 @@ def downsample10(n_jobs, n_cpu, verbose):
   for exp_id, file in enumerate(left_files, 1):
     if verbose is True:
       click.echo(f"running on {file}")
-    task_id = _downsample.options(
+    task_id = ray.remote(_downsample).options(
       name="x",
       num_cpus=n_cpu,
-    ).remote(file=file)
+    ).remote(file, src_dir, tgt_dir)
     task_ids.append(task_id)
 
     if len(task_ids) >= n_jobs:
@@ -849,6 +848,7 @@ pit.add_command(train_single)
 pit.add_command(download)
 pit.add_command(downsample10)
 pit.add_command(generate_dataset)
+pit.add_command(generate_dataset2)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
 pit.add_command(compute_slot_return)
