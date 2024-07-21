@@ -711,6 +711,7 @@ pit.add_command(download)
 pit.add_command(generate_dataset)
 pit.add_command(infer_hist)
 pit.add_command(infer_online)
+pit.add_command(compute_slot_return)
 
 if __name__ == "__main__":
   pit()
