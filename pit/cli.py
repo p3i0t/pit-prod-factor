@@ -427,6 +427,81 @@ def generate_dataset(n_jobs, n_cpu):
   ray.get(task_ids)
   t = perf_counter() - s
   click.echo(f"{len(all_groups)} tasks done in {t:.2f}s.")
+  
+@click.command()
+@click.option(
+  "--n_jobs", default=10, type=int, help="num of parallel jobs, defaults to 10."
+)
+@click.option(
+  "--cpu_per_task",
+  "n_cpu",
+  default=2,
+  type=int,
+  help="number of cpus per task, defaults to 2.",
+)
+def generate_dataset2(n_jobs, n_cpu):
+  """Generate dataset from downloaded raw data."""
+  cfg = read_config()
+  dir_1m = Path(cfg.raw.dir).joinpath("bar_1m")
+  dir_univ = Path(cfg.raw.dir).joinpath("univ")
+  dir_ret = Path(cfg.raw.dir).joinpath("return")
+  dir_lag_ret = Path(cfg.raw.dir).joinpath("lag_return")
+
+  dates_1m = [Path(_p).stem for _p in glob.glob(os.path.join(dir_1m, "*.parq"))]
+  dates_univ = [Path(_p).stem for _p in glob.glob(os.path.join(dir_univ, "*.parq"))]
+  dates_ret = [Path(_p).stem for _p in glob.glob(os.path.join(dir_ret, "*.parq"))]
+  dates_lag_ret = [
+    Path(_p).stem for _p in glob.glob(os.path.join(dir_lag_ret, "*.parq"))
+  ]
+
+  src_dates = set(dates_1m) & set(dates_univ) & set(dates_ret) & set(dates_lag_ret)
+  # always drop 6 recent dates to avoid incomplete data.
+  src_dates = sorted(src_dates)[:-6]
+
+  # merge dates as much as possible
+  this_year = datetime.datetime.now().year
+  this_month = datetime.datetime.now().month
+
+  year_groups = defaultdict(list)
+  for _date in src_dates:
+    if int(_date[:4]) != this_year:
+      year_groups[_date[:4]].append(_date)
+  month_groups = defaultdict(list)
+  for _date in src_dates:
+    if int(_date[:4]) == this_year and int(_date[5:7]) < this_month:
+      month_groups[_date[:7]].append(_date)
+  date_groups = defaultdict(list)
+  for _date in src_dates:
+    if int(_date[:4]) == this_year and int(_date[5:7]) == this_month:
+      date_groups[_date].append(_date)
+  
+  all_groups = year_groups | month_groups | date_groups
+  click.echo(f"{len(src_dates)} dates in total.")
+  click.echo(f"{len(year_groups)} year tasks, {len(month_groups)} "
+             f"month tasks, {len(date_groups)} date tasks.")
+
+  s = perf_counter()
+  task_ids = []
+  n_task_finished = 0
+  for group_tag, group_dates in all_groups.items():
+    task_id = (
+      ray.remote(_merge_single_group)
+      .options(
+        name="x",
+        num_cpus=n_cpu,
+      )
+      .remote(group_tag, group_dates)
+    )
+    task_ids.append(task_id)
+
+    if len(task_ids) >= n_jobs:
+      dones, task_ids = ray.wait(task_ids, num_returns=1)
+      ray.get(dones)
+      n_task_finished += 1
+      logger.info(f"{n_task_finished} tasks finished.")
+  ray.get(task_ids)
+  t = perf_counter() - s
+  click.echo(f"{len(all_groups)} tasks done in {t:.2f}s.")
 
 
 @click.command()
@@ -643,11 +718,11 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
 
 
 @click.command()
-@click.option(
-  "--duration",
-  default="30m",
-  type=click.Choice(["15m", "30m", "1h", "2h", "1d", "2d", "5d"]),
-)
+# @click.option(
+#   "--duration",
+#   default="30m",
+#   type=click.Choice(["15m", "30m", "1h", "2h", "1d", "2d", "5d"]),
+# )
 def compute_slot_return(duration):
   """compute returns for 8 intraday slots."""
   slots = ["0931", "1000", "1030", "1100", "1301", "1330", "1400", "1430"]
@@ -660,35 +735,50 @@ def compute_slot_return(duration):
   df_price = pl.scan_parquet(price_dir + "/*.parq").select(cols).collect()
 
   df_price_left = df_price.filter(pl.col("time").dt.time().is_in(times))
-  df_adj = adjust_tcalendar_slot_df(
-    duration=duration, start_slot=slots
-  )  # two columns: time, next_time
-  end_times = (
-    df_adj.select(pl.col("next_time").dt.time().unique()).to_series().to_list()
-  )
-  df_price_right = df_price.filter(pl.col("time").dt.time().is_in(end_times))
+  
+  ret_list = []
+  ret_cols = []
+  for duration in ["15m", "30m", "1h", "2h", "1d", "2d", "5d"]:
+    df_adj = adjust_tcalendar_slot_df(
+      duration=duration, start_slot=slots
+    )  # two columns: time, next_time
+    end_times = (
+      df_adj.select(pl.col("next_time").dt.time().unique()).to_series().to_list()
+    )
+    df_price_right = df_price.filter(pl.col("time").dt.time().is_in(end_times))
 
-  df_merge = df_price_left.join(df_adj, on="time")
-  df_merge = df_merge.join(
-    df_price_right,
-    left_on=["next_time", "symbol"],
-    right_on=["time", "symbol"],
-    suffix="_right",
-  )
+    df_merge = df_price_left.join(df_adj, on="time")
+    df_merge = df_merge.join(
+      df_price_right,
+      left_on=["next_time", "symbol"],
+      right_on=["time", "symbol"],
+      suffix="_right",
+    )
 
-  df_ret = df_merge.select(
-    pl.col("time").cast(pl.Date).alias("date"),
-    pl.col("time"),
-    pl.col("symbol"),
-    pl.col("adj_close_right")
-    .truediv(pl.col("adj_close"))
-    .sub(1)
-    .alias(f"ret_{duration}"),
-  )
+    _df_ret = df_merge.select(
+      pl.col("time").cast(pl.Date).alias("date"),
+      pl.col("time"),
+      pl.col("symbol"),
+      pl.col("adj_close_right")
+      .truediv(pl.col("adj_close"))
+      .sub(1)
+      .alias(f"ret_{duration}"),
+    )
+    ret_list.append(_df_ret)
+    ret_cols.append(f"ret_{duration}")
+
+  from functools import reduce
+  df_ret: pl.DataFrame = reduce(
+    lambda x, y: x.join(y, on=["date", "time", "symbol"], coalesce=True), ret_list)
+  
+  df_ret = df_ret.with_columns(
+    pl.col("datetime").dt.strftime("%H%M").alias("slot")
+  ).pivot(on="slot", index=["date", "symbol"], values=ret_cols)
+  
   pit_dir = cfg.pit_dir
   derived_dir = os.path.join(pit_dir, "derived")
 
-  item_dir = os.path.join(derived_dir, f"ret_{duration}")
+  item_dir = os.path.join(derived_dir, "ret_all")
   item_dir = Path(item_dir)
   item_dir.mkdir(parents=True, exist_ok=True)
 
