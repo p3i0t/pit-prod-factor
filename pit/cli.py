@@ -767,7 +767,7 @@ def compute_slot_return():
     lambda x, y: x.join(y, on=["date", "time", "symbol"], coalesce=True), ret_list)
   
   df_ret = df_ret.with_columns(
-    pl.col("datetime").dt.strftime("%H%M").alias("slot")
+    pl.col("time").dt.strftime("%H%M").alias("slot")
   ).pivot(on="slot", index=["date", "symbol"], values=ret_cols)
   
   pit_dir = cfg.pit_dir
