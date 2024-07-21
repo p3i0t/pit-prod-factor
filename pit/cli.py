@@ -718,11 +718,6 @@ def infer_hist(prod, begin, end, n_latest, universe, out_dir):
 
 
 @click.command()
-# @click.option(
-#   "--duration",
-#   default="30m",
-#   type=click.Choice(["15m", "30m", "1h", "2h", "1d", "2d", "5d"]),
-# )
 def compute_slot_return():
   """compute returns for 8 intraday slots."""
   slots = ["0931", "1000", "1030", "1100", "1301", "1330", "1400", "1430"]
@@ -782,7 +777,6 @@ def compute_slot_return():
   item_dir = Path(item_dir)
   item_dir.mkdir(parents=True, exist_ok=True)
 
-  # df_
   for (d,), _df in df_ret.partition_by(["date"], as_dict=True).items():
     _df.write_parquet(f"{item_dir}/{d:%Y-%m-%d}.parq")
   click.echo("task slot return done.")
